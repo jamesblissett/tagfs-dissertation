@@ -3,6 +3,16 @@ name = "tagfs-dissertation"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "tagfs"
+path = "src/fs/lib.rs"
+
+[[bin]]
+name = "tagfs"
+path = "src/programs/tagfs.rs"
 
 [dependencies]
+env_logger = "0.*"
+fuser = "0.*"
+libc = "0.2.*"
+log = "0.*"
