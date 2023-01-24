@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use log::{error, warn, info, debug, trace};
+use log::{error, trace};
 
 static DEFAULT_LOG_LEVEL: &str = "info";
 

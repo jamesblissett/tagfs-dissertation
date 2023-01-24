@@ -1,5 +1,6 @@
 use fuser::FUSE_ROOT_ID;
 
+#[derive(Debug)]
 pub struct INodeGenerator {
     last_value: u64
 }
