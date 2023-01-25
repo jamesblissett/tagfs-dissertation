@@ -1,9 +1,14 @@
+//! Command line program that mounts the filesystem.
+
 use std::io::Write;
 
 use log::{error, trace};
 
+/// The default log level if RUST_LOG is not set.
 static DEFAULT_LOG_LEVEL: &str = "info";
 
+/// Initialise the global logger with the default log level or the level
+/// specified in the RUST_LOG environment variable.
 fn init_logging() {
     use env_logger::{Builder, Env};
 
@@ -17,8 +22,10 @@ fn init_logging() {
 
 // TODO: make this more robust with proper argument parsing.
 // TODO: validate path and make sure it is sensible.
-// Callers of this function should realise that it is possible for this
-// function to terminate the process.
+/// Parse arguments to obtain a mount point.
+///
+/// Callers of this function should realise that it is possible for this
+/// function to terminate the process.
 fn get_mnt_point() -> String {
     if let Some(arg) = std::env::args().nth(1) {
         arg
@@ -29,14 +36,18 @@ fn get_mnt_point() -> String {
     }
 }
 
+/// Entry point.
 fn main() {
     init_logging();
     trace!("Application starting.");
 
     let mnt_point = get_mnt_point();
 
-    // returns when fs is unmounted.
-    tagfs::fs::mount(&mnt_point);
+    if let Err(e) = libtagfs::fs::mount(&mnt_point) {
+        error!("unmounted with error {e:?}");
+        eprintln!("tagfs: an unexpected error occured.");
+        eprintln!("tagfs: please check the log for more details.");
+    }
 
     trace!("Application ending.");
 }

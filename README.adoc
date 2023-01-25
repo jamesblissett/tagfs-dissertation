@@ -1,0 +1,6 @@
+= TagFS
+
+== Useful Commands
+
+=== Generate and open documentation
+`cargo doc --document-private-items --open`

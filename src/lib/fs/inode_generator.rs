@@ -1,12 +1,14 @@
+//! generates new inode without conflicts.
+
 use fuser::FUSE_ROOT_ID;
 
 #[derive(Debug)]
-pub struct INodeGenerator {
+pub(super) struct INodeGenerator {
     last_value: u64
 }
 
 impl INodeGenerator {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             last_value: FUSE_ROOT_ID,
         }
