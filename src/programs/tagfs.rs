@@ -24,6 +24,8 @@ fn init_logging() {
 // TODO: validate path and make sure it is sensible.
 /// Parse arguments to obtain a mount point.
 ///
+/// # Warning
+///
 /// Callers of this function should realise that it is possible for this
 /// function to terminate the process.
 fn get_mnt_point() -> String {
@@ -43,10 +45,27 @@ fn main() {
 
     let mnt_point = get_mnt_point();
 
-    if let Err(e) = libtagfs::fs::mount(&mnt_point) {
+    let db = libtagfs::db::get_or_create_db().unwrap_or_else(|e| {
+        error!("could not create database {e:?}.");
+        eprintln!("tagfs: could not find or create a database.");
+        eprintln!("tagfs: please check the log for more details.");
+        std::process::exit(1);
+    });
+
+    let mut db = db;
+    db.tag("/media/hdd/film/Heat (1995)", "genre", Some("crime"));
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("romance"));
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("slice-of-life"));
+    db.tag("/media/hdd/film/Before Sunset (2004)", "genre", Some("romance"));
+    db.tag("/media/hdd/film/Casino (1995)", "genre", Some("crime"));
+
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "favourite", None);
+
+    if let Err(e) = libtagfs::fs::mount(&mnt_point, db) {
         error!("unmounted with error {e:?}");
         eprintln!("tagfs: an unexpected error occured.");
         eprintln!("tagfs: please check the log for more details.");
+        std::process::exit(1);
     }
 
     trace!("Application ending.");
