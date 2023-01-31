@@ -1,9 +1,8 @@
 //! Module that handles interfacing with the sqlite database.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
 #[derive(Debug)]
@@ -16,8 +15,19 @@ pub struct Tag {
 #[derive(Debug)]
 pub struct TagMapping {
     tag: Tag,
-    path: PathBuf,
+    path: String,
     value: Option<String>
+}
+
+pub struct SimpleTagFormatter<'a>(pub &'a TagMapping);
+impl<'a> std::fmt::Display for SimpleTagFormatter<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(value) = &self.0.value {
+            write!(f, "{}={}", self.0.tag.name, value)
+        } else {
+            write!(f, "{}", self.0.tag.name)
+        }
+    }
 }
 
 /// Encapsulates all database logic.
@@ -112,7 +122,24 @@ impl Database {
             "INSERT INTO TagMapping (TagID, Path, Value) VALUES (?, ?, ?)"
         )?;
 
-        stmt.execute(rusqlite::params![tag.id, path, value])?;
+        let err = stmt.execute(rusqlite::params![tag.id, path, value]);
+        if let Err(rusqlite::Error::SqliteFailure(sql_error, _)) = err {
+            // Error code 2067 is a failure of a unique constraint.
+            // This means we tried to add a tag that already exists.
+            if sql_error.extended_code == 2067 {
+                if let Some(value) = value {
+                    err.with_context(||
+                        format!("\"{path}\" already has tag \"{tag_name}\" with value \"{value}\"."))?;
+                } else {
+                    err.with_context(||
+                        format!("error: \"{path}\" already has tag \"{tag_name}\"."))?;
+                }
+            } else {
+                err?;
+            }
+        } else {
+            err?;
+        }
 
         Ok(())
     }
@@ -122,7 +149,7 @@ impl Database {
         let mut stmt = self.conn.prepare_cached(
             "SELECT
                 Tag.TagID, Tag.Name, Tag.TakesValue,
-                TagMapping.Path, TagMapping.Value,
+                TagMapping.Path, TagMapping.Value
             FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
             WHERE TagMapping.Path = ?"
         )?;
@@ -135,7 +162,7 @@ impl Database {
                         name: row.get(1)?,
                         takes_value: row.get(2)?,
                     },
-                    path: PathBuf::from(row.get::<_, String>(3)?),
+                    path: row.get::<_, String>(3)?,
                     value: row.get(4)?,
                 })
             }
@@ -196,38 +223,50 @@ impl Database {
 
         Ok(tags)
     }
-}
 
-// TODO: remove unwrap, but it is very unlikely the HOME env var is not set.
-fn find_db_path() -> Result<PathBuf> {
+    /// Remove a tag from a path.
+    pub fn untag(&mut self, path: &str, tag: &str, value: Option<&str>)
+        -> Result<()>
+    {
+        if let Some(value) = value {
+            self.conn.execute(
+                "DELETE FROM TagMapping
+                 WHERE TagMapping.Path = ? AND
+                    TagMapping.Value = ? AND
+                    TagMapping.TagID in
+                        (SELECT Tag.TagID
+                        FROM Tag
+                        WHERE Tag.Name = ?)",
+                rusqlite::params![path, value, tag]
+            )?;
+        } else {
+            self.conn.execute(
+                "DELETE FROM TagMapping
+                 WHERE TagMapping.Path = ? AND
+                    TagMapping.TagID in
+                        (SELECT Tag.TagID
+                        FROM Tag
+                        WHERE Tag.Name = ?)",
+                rusqlite::params![path, tag]
+            )?;
+        }
+        Ok(())
+    }
 
-    // find the XDG_DATA_HOME or generate a suitable alternative.
-    let mut db_dir = std::env::var("XDG_DATA_HOME")
-        .map_or_else(
-            |_e| {
-                let home = std::env::var("HOME").unwrap();
-                let mut path = Path::new(&home).to_path_buf();
-                path.push(Path::new(".local/share"));
-                path
-            },
-            |xdg_data_path| Path::new(&xdg_data_path).to_path_buf());
-
-    // create our own directory within XDG_DATA_HOME.
-    db_dir.push("tagfs");
-    std::fs::create_dir_all(&db_dir)?;
-
-    // add our database file to the path.
-    db_dir.push("default.db");
-
-    let db = db_dir;
-    Ok(db)
+    pub fn untag_all(&mut self, path: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM TagMapping
+            WHERE TagMapping.Path = ?",
+            rusqlite::params![path]
+        )?;
+        Ok(())
+    }
 }
 
 /// Locates an existing TagFS database, or creates and intialises tables in a
 /// new database.
-pub fn get_or_create_db() -> Result<Database> {
-    let db_path = find_db_path()?;
-    let db = Connection::open(db_path)
+pub fn get_or_create_db(path: &str) -> Result<Database> {
+    let db = Connection::open(path)
         .map(|conn| Database { conn })?;
 
     db.initialise_tables()?;

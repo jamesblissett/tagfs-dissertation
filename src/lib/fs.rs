@@ -50,27 +50,27 @@ impl TagFS {
     }
 
     /// Helper function to reply with the root directory entries.
-    fn readdir_root(&mut self, offset: i64, mut reply: ReplyDirectory) {
+    fn readdir_root(&mut self, offset: i64, mut reply: Option<ReplyDirectory>) {
         let tags = self.db.all_tags().unwrap();
         for (idx, tag) in tags.iter().enumerate().skip(offset as usize) {
             let child_inode = self.entries.get_or_create_tag_directory(
                 FUSE_ROOT_ID, tag
             );
 
-            let done = reply.add(child_inode, (idx + 1) as i64,
+            let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
                 FileType::Directory, tag
-            );
+            )).unwrap_or(false);
 
             if done { break; }
         }
 
-        reply.ok();
+        reply.map(|reply| reply.ok());
     }
 
     /// Helper function to reply with the entries for a particular tag value
     /// pair.
     fn readdir_files(&mut self, tag: &str, value: Option<&str>, inode: u64,
-                     offset: i64, mut reply: ReplyDirectory)
+                     offset: i64, mut reply: Option<ReplyDirectory>)
     {
         if let Ok(children) = self.db.paths_with_tag(tag, value) {
             for (idx, child) in children.iter().enumerate().skip(offset as usize) {
@@ -83,19 +83,19 @@ impl TagFS {
                     )
                 };
 
-                let done = reply.add(child_inode, (idx + 1) as i64,
+                let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
                     FileType::Symlink, display_name.as_str()
-                );
+                )).unwrap_or(false);
 
                 if done { break; }
             }
         }
-        reply.ok();
+        reply.map(|reply| reply.ok());
     }
 
     /// Helper function to reply with all the values for a particular tag.
     fn readdir_values(&mut self, tag: &str, inode: u64, offset: i64,
-                      mut reply: ReplyDirectory)
+                      mut reply: Option<ReplyDirectory>)
     {
         if let Ok(children) = self.db.values(tag) {
             for (idx, child) in children.iter().enumerate().skip(offset as usize) {
@@ -106,68 +106,40 @@ impl TagFS {
                     self.entries.get_or_create_value_directory(inode, display_name.as_ref())
                 };
 
-                let done = reply.add(child_inode, (idx + 1) as i64,
+                let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
                     FileType::Directory, display_name.as_str()
-                );
+                )).unwrap_or(false);
 
                 if done { break; }
             }
         }
-        reply.ok();
+        reply.map(|reply| reply.ok());
     }
 
-    fn lookup_root(&mut self, parent: u64, name: &str, reply: ReplyEntry) {
+    /// Helper function to look up the root inode and create its children if
+    /// necessary.
+    fn lookup_root(&mut self, parent: u64, name: &str, reply: ReplyEntry) -> Option<u64>{
         let matches_tag = self.db.all_tags().unwrap().iter().any(|tag| tag == name);
         if matches_tag {
             let inode = self.entries.get_or_create_tag_directory(parent, name);
             reply.entry(&TTL, self.entries.get_attr(inode), 0);
+            Some(inode)
         } else {
             reply.error(libc::ENOENT);
-        }
-    }
-}
-
-impl fuser::Filesystem for TagFS {
-
-    // look up inode and get its attrs.
-    fn getattr(&mut self, _req: &Request<'_>, inode: u64, reply: ReplyAttr) {
-        info!("getattr(inode: {:#x?})", inode);
-
-        reply.attr(&TTL, self.entries.get_attr(inode));
-    }
-
-    // tells the caller if a file with parent and name exists.
-    fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr,
-              reply: ReplyEntry)
-    {
-        info!("lookup(parent_ino: {:#x?}, name: {:?})", parent, name);
-
-        // for now at least, we are only going to allow valid unicode.
-        let name = if let Some(name) = name.to_str() {
-            name
-        } else {
-            error!("tried to lookup non-unicode name \"{:?}\"", name);
-            panic!("tried to lookup non-unicode name \"{:?}\"", name);
-        };
-
-        if parent == FUSE_ROOT_ID {
-            self.lookup_root(parent, name, reply);
-        } else if let Some(inode) = self.entries.try_get_inode(parent, name) {
-            reply.entry(&TTL, self.entries.get_attr(inode), 0);
-        } else {
-            reply.error(libc::ENOENT);
+            None
         }
     }
 
-    // returns the entries in a directory
-    fn readdir(&mut self, _req: &Request, inode: u64, _fh: u64, offset: i64,
-               reply: ReplyDirectory)
-    {
-        info!("readdir(inode: {:#x?}, offset: {:?})", inode, offset);
+    /// Helper function that is called by both readdir and lookup.
+    ///
+    /// Creates the child inodes of a particular directory.
+    ///
+    /// Can be called with reply as None to do a 'fake' readdir for its side
+    /// effects only.
+    fn readdir_helper(&mut self, inode: u64, offset: i64, reply: Option<ReplyDirectory>) {
+        let attr = self.entries.get_attr(inode);
 
-        if inode == FUSE_ROOT_ID {
-            self.readdir_root(offset, reply);
-        } else {
+        if attr.kind == FileType::Directory {
             let name = self.entries.get_name(inode);
 
             match self.entries.get_type(inode) {
@@ -193,14 +165,69 @@ impl fuser::Filesystem for TagFS {
             }
         }
     }
+}
+
+impl fuser::Filesystem for TagFS {
+
+    // look up inode and get its attrs.
+    fn getattr(&mut self, _req: &Request<'_>, inode: u64, reply: ReplyAttr) {
+        info!("getattr(inode: {inode:#x?})");
+
+        reply.attr(&TTL, self.entries.get_attr(inode));
+    }
+
+    // tells the caller if a file with parent and name exists.
+    fn lookup(&mut self, _req: &Request<'_>, parent: u64, name: &OsStr,
+              reply: ReplyEntry)
+    {
+        info!("lookup(parent_ino: {parent:#x?}, name: {name:?})");
+
+        // for now at least, we are only going to allow valid unicode.
+        let name = name.to_str().map_or_else(|| {
+                error!("tried to lookup non-unicode name \"{name:?}\"");
+                panic!("tried to lookup non-unicode name \"{name:?}\"");
+            }, |name| name);
+
+        // We call the readdir helper functions to ensure that we create the
+        // child inodes as soon as possible. This ensures that even if readdir
+        // is not called, we can operate with just lookup.
+        if parent == FUSE_ROOT_ID {
+            self.readdir_root(0, None);
+
+            if let Some(inode) = self.lookup_root(parent, name, reply) {
+                self.readdir_helper(inode, 0, None);
+            }
+        } else if let Some(inode) = self.entries.try_get_inode(parent, name) {
+            let attr = self.entries.get_attr(inode).clone();
+
+            self.readdir_helper(inode, 0, None);
+
+            reply.entry(&TTL, &attr, 0);
+        } else {
+            reply.error(libc::ENOENT);
+        }
+    }
+
+    // returns the entries in a directory
+    fn readdir(&mut self, _req: &Request, inode: u64, _fh: u64, offset: i64,
+               reply: ReplyDirectory)
+    {
+        info!("readdir(inode: {inode:#x?}, offset: {offset:?})");
+
+        if inode == FUSE_ROOT_ID {
+            self.readdir_root(offset, Some(reply));
+        } else {
+            self.readdir_helper(inode, offset, Some(reply));
+        }
+    }
 
     fn readlink(&mut self, _req: &Request, inode: u64, reply: ReplyData) {
-        info!("readlink(inode: {:#x?})", inode);
+        info!("readlink(inode: {inode:#x?})");
         if let Some(target) = self.entries.get_link_target(inode) {
             reply.data(target.as_bytes());
         } else {
-            error!("could not find link target for inode: {:#x?}.", inode);
-            panic!("could not find link target for inode: {:#x?}.", inode);
+            error!("could not find link target for inode: {inode:#x?}.");
+            panic!("could not find link target for inode: {inode:#x?}.");
         }
     }
 }

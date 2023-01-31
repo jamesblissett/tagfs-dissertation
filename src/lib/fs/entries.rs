@@ -187,9 +187,8 @@ impl Entries {
     pub fn try_get_inode(&self, parent_inode: u64, name: &str)
         -> Option<u64>
     {
-        self.names.get(&parent_inode).map(|children|
-            children.get(name).copied()
-        ).flatten()
+        self.names.get(&parent_inode).and_then(|children|
+            children.get(name).copied())
     }
 
     /// Get the parent tag associated with a value by inode.
@@ -200,12 +199,12 @@ impl Entries {
             if let Entry::ValueDir { tag, .. } = entry {
                 tag
             } else {
-                error!("tried to lookup parent tag of non ValueDir entry: {:#x?}.", inode);
-                panic!("tried to lookup parent tag of non ValueDir entry: {:#x?}.", inode);
+                error!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
+                panic!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
             }
         } else {
-            error!("tried to lookup non existent inode: {:#x?}.", inode);
-            panic!("tried to lookup non existent inode: {:#x?}.", inode);
+            error!("tried to lookup non existent inode: {inode:#x?}.");
+            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
     }
 
@@ -234,8 +233,8 @@ impl Entries {
                 Entry::Link { attr, .. } => attr,
             }
         } else {
-            error!("tried to lookup non existent inode: {:#x?}.", inode);
-            panic!("tried to lookup non existent inode: {:#x?}.", inode);
+            error!("tried to lookup non existent inode: {inode:#x?}.");
+            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
     }
 
@@ -252,8 +251,8 @@ impl Entries {
                 Entry::Link { name, .. } => name,
             }
         } else {
-            error!("tried to lookup non existent inode: {:#x?}.", inode);
-            panic!("tried to lookup non existent inode: {:#x?}.", inode);
+            error!("tried to lookup non existent inode: {inode:#x?}.");
+            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
     }
 
@@ -270,8 +269,8 @@ impl Entries {
                 Entry::Link { .. } => EntryType::Link,
             }
         } else {
-            error!("tried to lookup non existent inode: {:#x?}.", inode);
-            panic!("tried to lookup non existent inode: {:#x?}.", inode);
+            error!("tried to lookup non existent inode: {inode:#x?}.");
+            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
     }
 }
