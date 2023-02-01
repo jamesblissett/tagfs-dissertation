@@ -1,10 +1,15 @@
 //! Module that handles parsing the command line using clap.
 
+#[cfg(test)]
+mod tests;
+
 use std::path::Path;
 
 use anyhow::{Result, Context};
 use once_cell::sync::Lazy;
 
+// NOTE: regex is quite restrictive at the moment, might want to allow more
+// stuff e.g. special characters.
 /// Regex to parse tag with an optional value delimitted by an equals.
 static TAG_VALUE_PAIR_REGEX: Lazy<regex::Regex> = Lazy::new(||
     regex::Regex::new("^(?P<tag>[a-zA-Z0-9]+)(?:=(?P<value>.*))?$").unwrap());
@@ -33,7 +38,6 @@ impl std::error::Error for TagValuePairParseError {
     }
 }
 
-// TODO: need some tests here.
 impl std::str::FromStr for TagValuePair {
     type Err = TagValuePairParseError;
 
@@ -90,7 +94,7 @@ pub struct TagsCommand {
 /// Handles the untag command args.
 #[derive(clap::Args, Clone, Debug)]
 pub struct UntagCommand {
-    /// Path to apply tag to.
+    /// Path to remove tag from.
     #[arg(required = true, value_name = "path")]
     pub path: String,
 

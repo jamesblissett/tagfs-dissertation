@@ -11,7 +11,7 @@ path = "src/lib/lib.rs"
 
 [[bin]]
 name = "tagfs"
-path = "src/programs/tagfs.rs"
+path = "src/tagfs.rs"
 
 [dependencies]
 anyhow = "1.*"

@@ -1,6 +1,9 @@
 //! Module that handles interfacing with the sqlite database.
 
-use std::collections::HashSet;
+#[cfg(test)]
+mod tests;
+
+mod query;
 
 use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
@@ -14,9 +17,10 @@ pub struct Tag {
 
 #[derive(Debug)]
 pub struct TagMapping {
-    tag: Tag,
-    path: String,
-    value: Option<String>
+    id: i64,
+    pub tag: Tag,
+    pub path: String,
+    pub value: Option<String>
 }
 
 pub struct SimpleTagFormatter<'a>(pub &'a TagMapping);
@@ -149,9 +153,10 @@ impl Database {
         let mut stmt = self.conn.prepare_cached(
             "SELECT
                 Tag.TagID, Tag.Name, Tag.TakesValue,
-                TagMapping.Path, TagMapping.Value
+                TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value
             FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
-            WHERE TagMapping.Path = ?"
+            WHERE TagMapping.Path = ?
+            ORDER BY TagMapping.TagMappingID"
         )?;
 
         let tags = stmt.query_map(rusqlite::params![path],
@@ -162,8 +167,9 @@ impl Database {
                         name: row.get(1)?,
                         takes_value: row.get(2)?,
                     },
-                    path: row.get::<_, String>(3)?,
-                    value: row.get(4)?,
+                    id: row.get(3)?,
+                    path: row.get::<_, String>(4)?,
+                    value: row.get(5)?,
                 })
             }
         )?.collect::<rusqlite::Result<_>>()?;
@@ -172,50 +178,53 @@ impl Database {
     }
 
     /// Returns a list of paths tagged with a particular tag.
-    pub fn paths_with_tag(&mut self, tag: &str, value: Option<&str>) -> Result<HashSet<String>> {
+    pub fn paths_with_tag(&mut self, tag: &str, value: Option<&str>) -> Result<Vec<String>> {
         let mut stmt = if value.is_some() {
             self.conn.prepare_cached(
                 "SELECT TagMapping.Path
                 FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
-                WHERE Tag.Name = ? AND TagMapping.Value = ?"
+                WHERE Tag.Name = ? AND TagMapping.Value = ?
+                ORDER BY TagMapping.TagMappingID"
             )?
         } else {
             self.conn.prepare_cached(
                 "SELECT TagMapping.Path
                 FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
-                WHERE Tag.Name = ?"
+                WHERE Tag.Name = ?
+                ORDER BY TagMapping.TagMappingID"
             )?
         };
 
         let tags = if value.is_some() {
             stmt.query_map(rusqlite::params![tag, value], |row| row.get(0))?
-                .collect::<rusqlite::Result<HashSet<_>>>()?
+                .collect::<rusqlite::Result<_>>()?
         } else {
             stmt.query_map(rusqlite::params![tag], |row| row.get(0))?
-                .collect::<rusqlite::Result<HashSet<_>>>()?
+                .collect::<rusqlite::Result<_>>()?
         };
 
         Ok(tags)
     }
 
     /// Returns all values used for a particular tag.
-    pub fn values(&mut self, tag: &str) -> Result<HashSet<String>> {
+    pub fn values(&mut self, tag: &str) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT TagMapping.Value
+            "SELECT DISTINCT TagMapping.Value
             FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
-            WHERE Tag.Name = ?"
+            WHERE Tag.Name = ?
+            ORDER BY TagMapping.TagMappingID ASC"
         )?;
 
-        let tags = stmt.query_map([tag], |row| row.get(0))?
-            .collect::<rusqlite::Result<_>>()?;
-
-        Ok(tags)
+        let values = stmt.query_map([tag], |row| row.get(0))?
+                        .collect::<rusqlite::Result<_>>();
+        values.or_else(|e| Err(e).with_context(||
+            format!("tag \"{tag}\" does not take any values")))
     }
 
     /// Returns the names of all tags that appear in the database.
     pub fn all_tags(&mut self) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT Name FROM Tag"
+            "SELECT Name FROM Tag ORDER BY Tag.TagID"
         )?;
 
         let tags = stmt.query_map([], |row| row.get(0))?
@@ -264,10 +273,16 @@ impl Database {
 }
 
 /// Locates an existing TagFS database, or creates and intialises tables in a
-/// new database.
-pub fn get_or_create_db(path: &str) -> Result<Database> {
-    let db = Connection::open(path)
-        .map(|conn| Database { conn })?;
+/// new database. \
+/// If path is None the database is created in memory (useful for testing).
+pub fn get_or_create_db(path: Option<&str>) -> Result<Database> {
+    let conn = if let Some(path) = path {
+        Connection::open(path)
+    } else {
+        Connection::open_in_memory()
+    };
+
+    let db = conn.map(|conn| Database { conn })?;
 
     db.initialise_tables()?;
 

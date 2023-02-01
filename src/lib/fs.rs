@@ -57,9 +57,12 @@ impl TagFS {
                 FUSE_ROOT_ID, tag
             );
 
-            let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
-                FileType::Directory, tag
-            )).unwrap_or(false);
+            let done = reply.as_mut().map(|reply|
+                reply.add(
+                    child_inode, (idx + 1) as i64,
+                    FileType::Directory, tag
+                )
+            ).unwrap_or(false);
 
             if done { break; }
         }
@@ -118,7 +121,9 @@ impl TagFS {
 
     /// Helper function to look up the root inode and create its children if
     /// necessary.
-    fn lookup_root(&mut self, parent: u64, name: &str, reply: ReplyEntry) -> Option<u64>{
+    fn lookup_root(&mut self, parent: u64, name: &str, reply: ReplyEntry)
+        -> Option<u64>
+    {
         let matches_tag = self.db.all_tags().unwrap().iter().any(|tag| tag == name);
         if matches_tag {
             let inode = self.entries.get_or_create_tag_directory(parent, name);
@@ -253,9 +258,11 @@ pub fn mount(mnt_point: &str, db: Database) -> std::io::Result<()> {
 
 // TODO: update this function to take into account the fact that we cannot have
 // files with the same name in the same directory.
-// TODO: this function looks like a good candidate for some tests :)
+// Once this is done this function will be a good candidate for some tests :)
 /// Converts a full path (such as "my/long/path") to its final component.
-fn sanitise_path<T: AsRef<str>>(path: &str, _siblings: impl Iterator<Item=T>) -> String {
+fn sanitise_path<T: AsRef<str>>(path: &str, _siblings: impl Iterator<Item=T>)
+    -> String
+{
     let path = std::path::Path::new(path);
     if let Some(file_name) = path.file_name() {
         String::from(file_name.to_string_lossy())

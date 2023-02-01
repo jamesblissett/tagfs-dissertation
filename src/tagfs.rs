@@ -1,14 +1,18 @@
 //! Entry point of tagfs where subcommands are implemented.
 
+mod cli;
+
 use std::io::Write;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use log::{error, trace};
 
-use libtagfs::{
-    cli::{Args, Command, MountCommand, TagCommand, TagsCommand, UntagCommand, TagValuePair},
-    db::Database,
+use libtagfs::db::Database;
+
+use cli::{
+    Args, Command, MountCommand, TagCommand, TagsCommand, UntagCommand,
+    TagValuePair,
 };
 
 /// The default log level if RUST_LOG is not set.
@@ -28,7 +32,7 @@ fn init_logging() {
 }
 
 // TODO: implement a 'prefix' system so that we don't have to give full paths
-//       to tag.
+//       to tag. Maybe a Settings (key, value) table in SQLite?
 /// Tag subcommand entry point.
 fn tag_main(command: TagCommand, mut db: Database) -> Result<()> {
     let tag = command.tag;
@@ -132,7 +136,7 @@ fn main() {
     let args = Args::parse();
 
     let db_path = unwrap_or_exit(args.db_path());
-    let db = unwrap_or_exit(libtagfs::db::get_or_create_db(&db_path)
+    let db = unwrap_or_exit(libtagfs::db::get_or_create_db(Some(&db_path))
         .context("could not find or create a database. Please check the log for more details."));
 
     let err = match args.command {
