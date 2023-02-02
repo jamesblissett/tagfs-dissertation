@@ -51,6 +51,22 @@ impl TagFS {
 
     /// Helper function to reply with the root directory entries.
     fn readdir_root(&mut self, offset: i64, mut reply: Option<ReplyDirectory>) {
+
+        if offset == 0 {
+            let query_dir_inode = self.entries.get_or_create_query_directory();
+            let done = reply.as_mut().map(|reply|
+                reply.add(
+                    query_dir_inode, 1,
+                    FileType::Directory, self.entries.get_name(query_dir_inode)
+                )
+            ).unwrap_or(false);
+
+            if done {
+                reply.map(|reply| reply.ok());
+                return;
+            }
+        }
+
         let tags = self.db.all_tags().unwrap();
         for (idx, tag) in tags.iter().enumerate().skip(offset as usize) {
             let child_inode = self.entries.get_or_create_tag_directory(
@@ -59,7 +75,7 @@ impl TagFS {
 
             let done = reply.as_mut().map(|reply|
                 reply.add(
-                    child_inode, (idx + 1) as i64,
+                    child_inode, (idx + 2) as i64,
                     FileType::Directory, tag
                 )
             ).unwrap_or(false);
@@ -121,7 +137,7 @@ impl TagFS {
 
     /// Helper function to look up the root inode and create its children if
     /// necessary.
-    fn lookup_root(&mut self, parent: u64, name: &str, reply: ReplyEntry)
+    fn lookup_root_child(&mut self, parent: u64, name: &str, reply: ReplyEntry)
         -> Option<u64>
     {
         let matches_tag = self.db.all_tags().unwrap().iter().any(|tag| tag == name);
@@ -130,9 +146,44 @@ impl TagFS {
             reply.entry(&TTL, self.entries.get_attr(inode), 0);
             Some(inode)
         } else {
-            reply.error(libc::ENOENT);
-            None
+            let query_dir_inode = self.entries.get_or_create_query_directory();
+            if name == self.entries.get_name(query_dir_inode) {
+                reply.entry(&TTL, self.entries.get_attr(query_dir_inode), 0);
+                Some(query_dir_inode)
+            } else {
+                reply.error(libc::ENOENT);
+                None
+            }
         }
+    }
+
+    /// Helper function to reply with all the paths for a particular query.
+    fn readdir_query(&mut self, inode: u64, offset: i64,
+                     mut reply: Option<ReplyDirectory>)
+    {
+        let query = self.entries.get_name(inode);
+        // the else case _should_ never happen because we have
+        // already rejected any invalid queries.
+        if let Ok(paths) = self.db.query(query) {
+            for (idx, child) in paths.iter().enumerate().skip(offset as usize) {
+                let display_name = sanitise_path(child, paths.iter());
+                let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
+                    child_inode
+                } else {
+                    self.entries.create_link(
+                        inode, display_name.as_ref(), child.as_ref()
+                    )
+                };
+
+                let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
+                    FileType::Symlink, display_name.as_str()
+                )).unwrap_or(false);
+
+                if done { break; }
+            }
+        }
+
+        reply.map(|reply| reply.ok());
     }
 
     /// Helper function that is called by both readdir and lookup.
@@ -163,8 +214,18 @@ impl TagFS {
                     let tag_name = self.entries.get_parent_tag(inode).to_string();
                     self.readdir_files(&tag_name, Some(&name.to_string()), inode, offset, reply);
                 }
+
+                // query dir should always look empty to readdir.
+                EntryType::QueryDir => {
+                    reply.map(|reply| reply.ok());
+                }
+
+                EntryType::QueryResultDir => {
+                    self.readdir_query(inode, offset, reply);
+                }
+
                 // cannot readdir something that is not a directory and the
-                // root case is already covered.
+                // root is already covered.
                 EntryType::Root | EntryType::Link =>
                     unreachable!(),
             }
@@ -199,9 +260,22 @@ impl fuser::Filesystem for TagFS {
         if parent == FUSE_ROOT_ID {
             self.readdir_root(0, None);
 
-            if let Some(inode) = self.lookup_root(parent, name, reply) {
+            if let Some(inode) = self.lookup_root_child(parent, name, reply) {
                 self.readdir_helper(inode, 0, None);
             }
+        } else if parent == self.entries.get_or_create_query_directory() {
+            info!("Running database query \"{name}\".");
+
+            if self.db.query(name).is_err() {
+                reply.error(libc::ENOENT);
+            } else {
+                let inode = self.entries.get_or_create_query_result_dir(name);
+                let attr = self.entries.get_attr(inode).clone();
+
+                self.readdir_helper(inode, 0, None);
+                reply.entry(&TTL, &attr, 0);
+            }
+
         } else if let Some(inode) = self.entries.try_get_inode(parent, name) {
             let attr = self.entries.get_attr(inode).clone();
 

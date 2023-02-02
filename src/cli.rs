@@ -63,6 +63,14 @@ impl std::str::FromStr for TagValuePair {
 //     }
 // }
 
+/// Handles the query command args.
+#[derive(clap::Args, Clone, Debug)]
+pub struct QueryCommand {
+    /// Query to run.
+    #[arg(required = true, value_name = "query")]
+    pub query: String,
+}
+
 /// Handles the tag command args.
 #[derive(clap::Args, Clone, Debug)]
 pub struct TagCommand {
@@ -124,6 +132,10 @@ pub enum Command {
 
     /// Display tags associated with a path
     Tags(TagsCommand),
+
+    /// Query the database.
+    #[command(visible_alias = "q", visible_alias = "search")]
+    Query(QueryCommand),
 }
 
 /// Contains the parsed arguments from the command line.

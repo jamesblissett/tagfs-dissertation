@@ -103,3 +103,53 @@ fn db_values() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn db_query() -> Result<()> {
+    let mut db = libtagfs::db::get_or_create_db(None)?;
+
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("romance"))?;
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("slice-of-life"))?;
+    db.tag("/media/hdd/film/Before Sunset (2004)", "genre", Some("romance"))?;
+    db.tag("/media/hdd/film/Casino (1995)", "genre", Some("crime"))?;
+    db.tag("/media/hdd/film/Heat (1995)", "genre", Some("crime"))?;
+
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "favourite", None)?;
+    db.tag("/media/hdd/film/Casino (1995)", "favourite", None)?;
+
+    db.tag("/media/hdd/film/Before Sunrise (1995)", "actor", Some("Julie Delpy"))?;
+    db.tag("/media/hdd/film/Before Sunset (2004)", "actor", Some("Julie Delpy"))?;
+
+    let paths = db.query("genre=romance or not favourite and genre=crime")?;
+
+    assert_eq!(paths, &[
+        "/media/hdd/film/Before Sunrise (1995)",
+        "/media/hdd/film/Before Sunset (2004)",
+        "/media/hdd/film/Heat (1995)",
+    ]);
+
+    let paths = db.query("genre=romance and favourite")?;
+
+    assert_eq!(paths, &[
+        "/media/hdd/film/Before Sunrise (1995)",
+    ]);
+
+    let paths = db.query("not genre=crime")?;
+
+    assert_eq!(paths, &[
+        "/media/hdd/film/Before Sunrise (1995)",
+        "/media/hdd/film/Before Sunset (2004)",
+    ]);
+
+    let paths = db.query("actor=\"Julie Delpy\"")?;
+
+    assert_eq!(paths, &[
+        "/media/hdd/film/Before Sunrise (1995)",
+        "/media/hdd/film/Before Sunset (2004)",
+    ]);
+
+    // malformed query should result in error.
+    assert!(db.query("actor \"Julie Delpy\"").is_err());
+
+    Ok(())
+}

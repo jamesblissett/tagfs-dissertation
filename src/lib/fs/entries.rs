@@ -8,10 +8,18 @@ use log::error;
 use crate::fs::INodeGenerator;
 use crate::fs::MOUNT_TIME;
 
+static QUERY_DIR_NAME: &str = "?";
+
 #[derive(Debug)]
 enum Entry {
     Root {
         attr: FileAttr,
+    },
+    QueryDir {
+        attr: FileAttr,
+    },
+    QueryResultDir {
+        name: String, attr: FileAttr,
     },
     TagDir {
         name: String, attr: FileAttr,
@@ -28,6 +36,8 @@ enum Entry {
 #[derive(Debug)]
 pub enum EntryType {
     Root,
+    QueryDir,
+    QueryResultDir,
     TagDir,
     Link,
     ValueDir,
@@ -69,10 +79,80 @@ impl Entries {
                 blksize: 512,
             }});
 
-        Self {
+        let entries = Self {
             inode_generator: INodeGenerator::new(),
             names: HashMap::new(),
             attrs,
+        };
+        entries
+    }
+
+    /// Returns the inode of the query directory, or creates it if it does not
+    /// exist.
+    pub fn get_or_create_query_directory(&mut self) -> u64 {
+        let children = self.names.entry(FUSE_ROOT_ID).or_default();
+        if let Some(inode) = children.get(QUERY_DIR_NAME) {
+            *inode
+        } else {
+            let inode = self.inode_generator.next();
+            children.insert(QUERY_DIR_NAME.to_string(), inode);
+
+            self.attrs.insert(inode, Entry::QueryDir {
+                attr: FileAttr {
+                    ino: inode,
+                    size: 0,
+                    blocks: 0,
+                    atime: *MOUNT_TIME,
+                    mtime: *MOUNT_TIME,
+                    ctime: *MOUNT_TIME,
+                    crtime: *MOUNT_TIME,
+                    kind: FileType::Directory,
+                    perm: 0o755,
+                    nlink: 1,
+                    uid: 1000,
+                    gid: 1000,
+                    rdev: 0,
+                    flags: 0,
+                    blksize: 512,
+            }});
+
+            inode
+        }
+    }
+
+    /// Returns the inode of a query result directory, or creates it if it does
+    /// not exist.
+    pub fn get_or_create_query_result_dir(&mut self, name: &str) -> u64
+    {
+        let query_dir_inode = self.get_or_create_query_directory();
+        let children = self.names.entry(query_dir_inode).or_default();
+        if let Some(inode) = children.get(name) {
+            *inode
+        } else {
+            let inode = self.inode_generator.next();
+            children.insert(name.to_string(), inode);
+
+            self.attrs.insert(inode, Entry::QueryResultDir {
+                name: name.to_string(),
+                attr: FileAttr {
+                    ino: inode,
+                    size: 0,
+                    blocks: 0,
+                    atime: *MOUNT_TIME,
+                    mtime: *MOUNT_TIME,
+                    ctime: *MOUNT_TIME,
+                    crtime: *MOUNT_TIME,
+                    kind: FileType::Directory,
+                    perm: 0o755,
+                    nlink: 1,
+                    uid: 1000,
+                    gid: 1000,
+                    rdev: 0,
+                    flags: 0,
+                    blksize: 512,
+            }});
+
+            inode
         }
     }
 
@@ -212,9 +292,10 @@ impl Entries {
     pub fn get_link_target(&self, inode: u64) -> Option<&str> {
         self.attrs.get(&inode).map(|entry| {
             match entry {
-                Entry::Root { .. } => panic!("programming error - root directory is not a link and has no target."),
-                Entry::TagDir { .. } => panic!("programming error - directory is not a link and has no target."),
-                Entry::ValueDir { .. } => panic!("programming error - directory is not a link and has no target."),
+                Entry::Root { .. } | Entry::QueryDir { .. }
+                | Entry::QueryResultDir { .. } | Entry::TagDir { .. }
+                | Entry::ValueDir { .. } =>
+                    panic!("programming error - directory is not a link and has no target."),
                 Entry::Link { target, .. } => target.as_str(),
             }
         })
@@ -228,6 +309,8 @@ impl Entries {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
                 Entry::Root { attr } => attr,
+                Entry::QueryDir { attr } => attr,
+                Entry::QueryResultDir { attr, .. } => attr,
                 Entry::TagDir { attr, .. } => attr,
                 Entry::ValueDir { attr, .. } => attr,
                 Entry::Link { attr, .. } => attr,
@@ -246,6 +329,8 @@ impl Entries {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
                 Entry::Root { .. } => "/",
+                Entry::QueryDir { .. } => QUERY_DIR_NAME,
+                Entry::QueryResultDir { name, .. } => name,
                 Entry::TagDir { name, .. } => name,
                 Entry::ValueDir { name, .. } => name,
                 Entry::Link { name, .. } => name,
@@ -264,6 +349,8 @@ impl Entries {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
                 Entry::Root { .. } => EntryType::Root,
+                Entry::QueryDir { .. } => EntryType::QueryDir,
+                Entry::QueryResultDir { .. } => EntryType::QueryResultDir,
                 Entry::TagDir { .. } => EntryType::TagDir,
                 Entry::ValueDir { .. } => EntryType::ValueDir,
                 Entry::Link { .. } => EntryType::Link,

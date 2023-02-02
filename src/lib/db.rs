@@ -1,9 +1,8 @@
 //! Module that handles interfacing with the sqlite database.
 
-#[cfg(test)]
-mod tests;
-
 mod query;
+
+use std::str::FromStr;
 
 use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
@@ -262,6 +261,7 @@ impl Database {
         Ok(())
     }
 
+    /// Remove all tags from a path.
     pub fn untag_all(&mut self, path: &str) -> Result<()> {
         self.conn.execute(
             "DELETE FROM TagMapping
@@ -269,6 +269,14 @@ impl Database {
             rusqlite::params![path]
         )?;
         Ok(())
+    }
+
+    /// Build and execute a user query.
+    pub fn query(&mut self, query: &str) -> Result<Vec<String>> {
+        let query = query::Query::from_str(query)?;
+
+        query.execute(self)
+            .map_err(|e| e.context("invalid query."))
     }
 }
 

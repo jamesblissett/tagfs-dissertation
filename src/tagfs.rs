@@ -11,8 +11,8 @@ use log::{error, trace};
 use libtagfs::db::Database;
 
 use cli::{
-    Args, Command, MountCommand, TagCommand, TagsCommand, UntagCommand,
-    TagValuePair,
+    Args, Command, MountCommand, QueryCommand, TagCommand, TagsCommand,
+    UntagCommand, TagValuePair,
 };
 
 /// The default log level if RUST_LOG is not set.
@@ -51,6 +51,22 @@ fn untag_main(command: UntagCommand, mut db: Database) -> Result<()> {
             db.untag(path, &tag, value.as_deref()),
         None => db.untag_all(path),
     }
+}
+
+fn query_main(command: QueryCommand, mut db: Database) -> Result<()> {
+    let query = command.query;
+
+    let paths = db.query(&query)?;
+
+    if paths.is_empty() {
+        bail!("no paths found matching query \"{}\".", query);
+    }
+
+    for path in &paths {
+        println!("{path}");
+    }
+
+    Ok(())
 }
 
 /// Tags subcommand entry point when no path argument is given.
@@ -147,6 +163,7 @@ fn main() {
             tags_specific_path_main(&path, db),
         Command::Tags(TagsCommand { path: None, .. } ) =>
             tags_all_main(db),
+        Command::Query(query_command) => query_main(query_command, db),
     };
 
     display_and_log_error(err);
