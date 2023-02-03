@@ -1,12 +1,12 @@
 //! Module that handles interfacing with the sqlite database.
 
 mod query;
-
-use std::str::FromStr;
+pub use query::TagValuePair;
 
 use anyhow::{bail, Context, Result};
 use rusqlite::Connection;
 
+/// Analogue to the database table.
 #[derive(Debug)]
 pub struct Tag {
     id: i64,
@@ -14,6 +14,7 @@ pub struct Tag {
     pub takes_value: bool,
 }
 
+/// Analogue to the database table.
 #[derive(Debug)]
 pub struct TagMapping {
     id: i64,
@@ -22,6 +23,10 @@ pub struct TagMapping {
     pub value: Option<String>
 }
 
+/// Newtype wrapper struct to print a tag mapping. \
+/// A newtype is used (rather than implementing Display directly on TagMapping)
+/// because it allows the easy creation of multiple differing Display
+/// implementations.
 pub struct SimpleTagFormatter<'a>(pub &'a TagMapping);
 impl<'a> std::fmt::Display for SimpleTagFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -272,8 +277,10 @@ impl Database {
     }
 
     /// Build and execute a user query.
-    pub fn query(&mut self, query: &str) -> Result<Vec<String>> {
-        let query = query::Query::from_str(query)?;
+    pub fn query(&mut self, query: &str, case_sensitive: bool)
+        -> Result<Vec<String>>
+    {
+        let query = query::Query::from_raw(query, case_sensitive)?;
 
         query.execute(self)
             .map_err(|e| e.context("invalid query."))

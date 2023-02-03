@@ -164,7 +164,7 @@ impl TagFS {
         let query = self.entries.get_name(inode);
         // the else case _should_ never happen because we have
         // already rejected any invalid queries.
-        if let Ok(paths) = self.db.query(query) {
+        if let Ok(paths) = self.db.query(query, false) {
             for (idx, child) in paths.iter().enumerate().skip(offset as usize) {
                 let display_name = sanitise_path(child, paths.iter());
                 let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
@@ -266,7 +266,7 @@ impl fuser::Filesystem for TagFS {
         } else if parent == self.entries.get_or_create_query_directory() {
             info!("Running database query \"{name}\".");
 
-            if self.db.query(name).is_err() {
+            if self.db.query(name, false).is_err() {
                 reply.error(libc::ENOENT);
             } else {
                 let inode = self.entries.get_or_create_query_result_dir(name);

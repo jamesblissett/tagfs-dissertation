@@ -1,67 +1,10 @@
 //! Module that handles parsing the command line using clap.
 
-#[cfg(test)]
-mod tests;
-
 use std::path::Path;
 
 use anyhow::{Result, Context};
-use once_cell::sync::Lazy;
 
-// NOTE: regex is quite restrictive at the moment, might want to allow more
-// stuff e.g. special characters.
-/// Regex to parse tag with an optional value delimitted by an equals.
-static TAG_VALUE_PAIR_REGEX: Lazy<regex::Regex> = Lazy::new(||
-    regex::Regex::new("^(?P<tag>[a-zA-Z0-9]+)(?:=(?P<value>.*))?$").unwrap());
-
-/// Helper struct to allow clap to perform the parsing for us.
-#[derive(Clone, Debug)]
-pub struct TagValuePair {
-    pub tag: String,
-    pub value: Option<String>
-}
-
-/// Required by clap to parse a tag value pair. \
-/// Used when the tag value pair is not in the correct format.
-#[derive(Clone, Debug)]
-pub struct TagValuePairParseError;
-
-impl std::fmt::Display for TagValuePairParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "not in the required tag(=value)? format. Only alphanumeric ASCII characters are allowed in the tag name.")
-    }
-}
-
-impl std::error::Error for TagValuePairParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
-
-impl std::str::FromStr for TagValuePair {
-    type Err = TagValuePairParseError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let captures = TAG_VALUE_PAIR_REGEX.captures(s)
-            .ok_or(Self::Err {})?;
-
-        let tag = captures.name("tag").ok_or(TagValuePairParseError)?
-            .as_str().to_string();
-        let value = captures.name("value").map(|m| m.as_str().to_string());
-
-        Ok(Self { tag, value })
-    }
-}
-
-// impl std::fmt::Display for TagValuePair {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         if let Some(value) = &self.value {
-//             write!(f, "{}={}", self.tag, value)
-//         } else {
-//             write!(f, "{}", self.tag)
-//         }
-//     }
-// }
+use libtagfs::db::TagValuePair;
 
 /// Handles the query command args.
 #[derive(clap::Args, Clone, Debug)]
@@ -69,6 +12,10 @@ pub struct QueryCommand {
     /// Query to run.
     #[arg(required = true, value_name = "query")]
     pub query: String,
+
+    /// Enable case sensitivity.
+    #[arg(short = 'I', long = "case-sensitive")]
+    pub case_sensitive: bool,
 }
 
 /// Handles the tag command args.

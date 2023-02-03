@@ -1,6 +1,9 @@
 //! Handles the user queries to the tag db.
 
-use anyhow::Result;
+#[cfg(test)]
+mod tests;
+
+use anyhow::{bail, Result};
 
 static SQL_PARTIAL_SELECT_START: &str = "\
 SELECT DISTINCT TagMapping.Path \
@@ -13,6 +16,14 @@ TagMapping.Path IN ( \
     SELECT TagMapping.Path \
     FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
     WHERE Tag.Name = ? AND TagMapping.Value = ? \
+    COLLATE NOCASE \
+)";
+
+static SQL_PARTIAL_EQ_VALUE_CASE_SENS: &str = "\
+TagMapping.Path IN ( \
+    SELECT TagMapping.Path \
+    FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
+    WHERE Tag.Name = ? AND TagMapping.Value = ? \
 )";
 
 static SQL_PARTIAL_EQ: &str = "\
@@ -20,8 +31,17 @@ TagMapping.Path IN ( \
     SELECT TagMapping.Path \
     FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
     WHERE Tag.Name = ? \
+    COLLATE NOCASE \
 )";
 
+static SQL_PARTIAL_EQ_CASE_SENS: &str = "\
+TagMapping.Path IN ( \
+    SELECT TagMapping.Path \
+    FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
+    WHERE Tag.Name = ? \
+)";
+
+/// A lexed token.
 #[derive(Debug, PartialEq)]
 enum Token {
     LeftParen,
@@ -37,6 +57,7 @@ enum Token {
 }
 
 impl Token {
+    /// Returns whether this token is a comparison operator.
     const fn is_comparison_operator(&self) -> bool {
         matches!(&self, Self::Equals | Self::LessThan | Self::GreaterThan)
     }
@@ -95,6 +116,8 @@ fn lex_query(query: &str) -> Vec<Token> {
                     !end_of_value
                 })
                 {
+                    // a character is escaped if it is preceded by a backslash
+                    // and it is not already escaped.
                     if c == '\\' && !escaped {
                         escaped = true;
                     } else {
@@ -145,8 +168,8 @@ fn lex_query(query: &str) -> Vec<Token> {
 /// This can result in some broken / nonsense queries being built, but there
 /// _should_ be no risk of SQL injection due to no string interpolation of user
 /// provided values.
-fn to_sql(tokens: &[Token])
-    -> std::result::Result<(String, Vec<String>), QueryBuildError>
+fn to_sql(tokens: &[Token], case_sensitive: bool)
+    -> Result<(String, Vec<String>)>
 {
     use Token::*;
 
@@ -164,12 +187,17 @@ fn to_sql(tokens: &[Token])
                     Some(Equals) => {
                         let value = windows.next_if(|t| matches!(t, Value(_)));
                         if let Some(Value(value)) = value {
-                            sql.push_str(SQL_PARTIAL_EQ_VALUE);
+
+                            if case_sensitive {
+                                sql.push_str(SQL_PARTIAL_EQ_VALUE_CASE_SENS);
+                            } else {
+                                sql.push_str(SQL_PARTIAL_EQ_VALUE);
+                            }
 
                             params.push(tag.clone());
                             params.push(value.clone());
                         } else {
-                            Err(QueryBuildError)?;
+                            bail!("expected value after = operator.");
                         }
                     }
                     Some(GreaterThan) => {
@@ -177,7 +205,7 @@ fn to_sql(tokens: &[Token])
                         if let Some(Value(value)) = value {
                             eprintln!("{tag} > {value}");
                         } else {
-                            Err(QueryBuildError)?;
+                            bail!("expected value after > operator.");
                         }
                     }
                     Some(LessThan) => {
@@ -185,14 +213,18 @@ fn to_sql(tokens: &[Token])
                         if let Some(Value(value)) = value {
                             eprintln!("{tag} < {value}");
                         } else {
-                            Err(QueryBuildError)?;
+                            bail!("expected value after < operator.");
                         }
                     }
 
                     // if there is no comparison operator then we just match
                     // against the existence of the tag.
                     None => {
-                        sql.push_str(SQL_PARTIAL_EQ);
+                        if case_sensitive {
+                            sql.push_str(SQL_PARTIAL_EQ_CASE_SENS);
+                        } else {
+                            sql.push_str(SQL_PARTIAL_EQ);
+                        }
 
                         params.push(tag.clone());
                     }
@@ -212,8 +244,11 @@ fn to_sql(tokens: &[Token])
 
             // we should only see these tokens after a tag, otherwise it is an
             // error.
-            Equals | LessThan | GreaterThan | Value(_) => {
-                Err(QueryBuildError)?;
+            Value(_) => {
+                bail!("unexpected value.");
+            }
+            Equals | LessThan | GreaterThan => {
+                bail!("unexpected comparison operator.");
             }
         }
     }
@@ -224,6 +259,53 @@ fn to_sql(tokens: &[Token])
     Ok((sql, params))
 }
 
+/// Required by clap to parse a tag value pair. \
+/// Used when the tag value pair is not in the correct format.
+#[derive(Clone, Debug)]
+pub struct TagValuePairParseError;
+
+impl std::fmt::Display for TagValuePairParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "not in the required tag(=value)? format. Only alphanumeric ASCII characters are allowed in the tag name.")
+    }
+}
+
+impl std::error::Error for TagValuePairParseError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+}
+
+/// Contains a simple tag value pair parsed from user input.
+#[derive(Clone, Debug)]
+pub struct TagValuePair {
+    pub tag: String,
+    pub value: Option<String>,
+}
+
+impl std::str::FromStr for TagValuePair {
+    type Err = TagValuePairParseError;
+
+    /// Parses a tag value pair from a string as a subset of a query.
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let mut tokens = lex_query(s);
+
+        match &mut *tokens {
+            [Token::Tag(tag), Token::Equals, Token::Value(value)] => {
+                let tag = std::mem::take(tag);
+                let value = Some(std::mem::take(value));
+                Ok(TagValuePair { tag, value })
+            }
+            [Token::Tag(tag)] => {
+                let tag = std::mem::take(tag);
+                Ok(TagValuePair { tag, value: None })
+            }
+            _ => Err(TagValuePairParseError),
+        }
+    }
+}
+
+/// Ready to execute query.
 #[derive(Debug)]
 pub struct Query {
     _raw: String,
@@ -232,6 +314,9 @@ pub struct Query {
 }
 
 impl Query {
+
+    /// Runs the query on the provided database and returns the list of paths
+    /// that match.
     pub fn execute(self, db: &mut super::Database) -> Result<Vec<String>> {
         let mut stmt = db.conn.prepare_cached(&self.sql)?;
         let params = rusqlite::params_from_iter(self.params);
@@ -241,70 +326,14 @@ impl Query {
 
         Ok(paths)
     }
-}
 
-#[derive(Debug)]
-pub struct QueryBuildError;
-impl std::fmt::Display for QueryBuildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "could not build query.")
-    }
-}
-impl std::error::Error for QueryBuildError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
-
-impl std::str::FromStr for Query {
-    type Err = QueryBuildError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    // To build a query it is simply split into tokens and converted directly to
+    // SQL. There is no need for proper parsing because the query language has
+    // the same structure as the SQL query.
+    pub fn from_raw(s: &str, case_sensitive: bool) -> Result<Self> {
         let tokens = lex_query(s);
-        let (sql, params) = to_sql(&tokens)?;
+        let (sql, params) = to_sql(&tokens, case_sensitive)?;
 
         Ok(Self { _raw: String::from(s), sql, params })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Token::*;
-
-    #[test]
-    fn lex() {
-        assert_eq!(
-            super::lex_query("hello"),
-            &[Tag(String::from("hello"))]
-        );
-
-        assert_eq!(
-            super::lex_query("hello=world"),
-            &[Tag(String::from("hello")), Equals, Value(String::from("world"))]
-        );
-
-        assert_eq!(
-            super::lex_query("      (     hello   =world)"),
-            &[
-                LeftParen, Tag(String::from("hello")), Equals,
-                Value(String::from("world")), RightParen
-            ]
-        );
-
-        assert_eq!(
-            super::lex_query("      (     not nothello   < \\(wor=ld)"),
-            &[
-                LeftParen, Not, Tag(String::from("nothello")), LessThan,
-                Value(String::from("(wor=ld")), RightParen
-            ]
-        );
-
-        assert_eq!(
-            super::lex_query("      (     not nothello   > \"(wor\\\"=ld)\""),
-            &[
-                LeftParen, Not, Tag(String::from("nothello")), GreaterThan,
-                Value(String::from("(wor\"=ld)"))
-            ]
-        );
     }
 }

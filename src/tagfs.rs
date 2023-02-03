@@ -8,11 +8,11 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use log::{error, trace};
 
-use libtagfs::db::Database;
+use libtagfs::db::{Database, TagValuePair};
 
 use cli::{
     Args, Command, MountCommand, QueryCommand, TagCommand, TagsCommand,
-    UntagCommand, TagValuePair,
+    UntagCommand,
 };
 
 /// The default log level if RUST_LOG is not set.
@@ -56,7 +56,7 @@ fn untag_main(command: UntagCommand, mut db: Database) -> Result<()> {
 fn query_main(command: QueryCommand, mut db: Database) -> Result<()> {
     let query = command.query;
 
-    let paths = db.query(&query)?;
+    let paths = db.query(&query, command.case_sensitive)?;
 
     if paths.is_empty() {
         bail!("no paths found matching query \"{}\".", query);
@@ -101,9 +101,9 @@ fn tags_specific_path_main(path: &str, mut db: Database) -> Result<()> {
 }
 
 /// Mount subcommand entry point.
-fn mount_main(command: MountCommand, mut db: Database) -> Result<()> {
+fn mount_main(command: MountCommand, db: Database) -> Result<()> {
 
-    populate_db(&mut db)?;
+    // populate_db(&mut db)?;
 
     libtagfs::fs::mount(&command.mount_point, db)
         .context("an unexpected fuse error occured. Please check the log for more details.")?;
@@ -111,20 +111,20 @@ fn mount_main(command: MountCommand, mut db: Database) -> Result<()> {
     Ok(())
 }
 
-/// Debugging function to generate test data.
-fn populate_db(db: &mut Database) -> Result<()> {
+// /// Debugging function to generate test data.
+// fn populate_db(db: &mut Database) -> Result<()> {
 
-    // Ignore result deliberate debug.
-    db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("romance"));
-    db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("slice-of-life"));
-    db.tag("/media/hdd/film/Before Sunset (2004)", "genre", Some("romance"));
-    db.tag("/media/hdd/film/Casino (1995)", "genre", Some("crime"));
-    db.tag("/media/hdd/film/Heat (1995)", "genre", Some("crime"));
+//     // Ignore result deliberate debug.
+//     db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("romance"));
+//     db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("slice-of-life"));
+//     db.tag("/media/hdd/film/Before Sunset (2004)", "genre", Some("romance"));
+//     db.tag("/media/hdd/film/Casino (1995)", "genre", Some("crime"));
+//     db.tag("/media/hdd/film/Heat (1995)", "genre", Some("crime"));
 
-    db.tag("/media/hdd/film/Before Sunrise (1995)", "favourite", None);
+//     db.tag("/media/hdd/film/Before Sunrise (1995)", "favourite", None);
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 /// Helper function to display and log an error.
 fn display_and_log_error<T>(res: Result<T>) {
