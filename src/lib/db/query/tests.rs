@@ -16,9 +16,9 @@ fn lex() {
     );
 
     assert_eq!(
-        super::lex_query("      (     hello   =world)"),
+        super::lex_query("      (     hello   ==world)"),
         &[
-            LeftParen, Tag(String::from("hello")), Equals,
+            LeftParen, Tag(String::from("hello")), StrictEquals,
             Value(String::from("world")), RightParen
         ]
     );
@@ -44,6 +44,14 @@ fn lex() {
         &[
             LeftParen, Not, GreaterThan,
             Value(String::from("(wor\"=ld)"))
+        ]
+    );
+
+    assert_eq!(
+        super::lex_query("          not tag  =\\=\\ (wor\\\"=ld\\)"),
+        &[
+            Not, Tag(String::from("tag")), Equals,
+            Value(String::from("= (wor\"=ld)"))
         ]
     );
 }

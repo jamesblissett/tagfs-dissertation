@@ -13,7 +13,7 @@ pub struct QueryCommand {
     #[arg(required = true, value_name = "query")]
     pub query: String,
 
-    /// Enable case sensitivity.
+    /// Enable case sensitivity for the strict equals operator (==).
     #[arg(short = 'I', long = "case-sensitive")]
     pub case_sensitive: bool,
 }
@@ -102,6 +102,17 @@ pub enum Command {
     Tags(TagsCommand),
 
     /// Query the database.
+    ///
+    /// The query format is best described with an example:
+    ///
+    ///     genre==romance and not actor=delpy
+    ///
+    /// This query will match the paths with the genre=romance tag (exact
+    /// match) as long as it does not have the actor tag with a value matching
+    /// "delpy" (non-exact match).
+    ///
+    /// There is also an or operator and parentheses can be used to further
+    /// refine the query.
     #[command(visible_alias = "q", visible_alias = "search")]
     Query(QueryCommand),
 

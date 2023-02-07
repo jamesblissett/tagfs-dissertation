@@ -121,7 +121,7 @@ fn db_query() -> Result<()> {
     db.tag("/media/hdd/film/Before Sunrise (1995)", "actor", Some("Julie Delpy"))?;
     db.tag("/media/hdd/film/Before Sunset (2004)", "actor", Some("Julie Delpy"))?;
 
-    let paths = db.query("genre=romance or not favourite and genre=crime", false)?
+    let paths = db.query("genre==romance or not favourite and genre==crime", false)?
         .into_iter().map(|(path, _)| path).collect::<Vec<_>>();
 
     assert_eq!(paths, &[
@@ -130,14 +130,14 @@ fn db_query() -> Result<()> {
         "/media/hdd/film/Heat (1995)",
     ]);
 
-    let paths = db.query("genre=romance and favourite", false)?
+    let paths = db.query("genre==romance and favourite", false)?
         .into_iter().map(|(path, _)| path).collect::<Vec<_>>();
 
     assert_eq!(paths, &[
         "/media/hdd/film/Before Sunrise (1995)",
     ]);
 
-    let paths = db.query("not genre=crime", false)?
+    let paths = db.query("not genre==crime", false)?
         .into_iter().map(|(path, _)| path).collect::<Vec<_>>();
 
     assert_eq!(paths, &[
@@ -145,7 +145,7 @@ fn db_query() -> Result<()> {
         "/media/hdd/film/Before Sunset (2004)",
     ]);
 
-    let paths = db.query("actor=\"Julie Delpy\"", false)?
+    let paths = db.query("actor==\"Julie Delpy\"", false)?
         .into_iter().map(|(path, _)| path).collect::<Vec<_>>();
 
     assert_eq!(paths, &[
@@ -156,16 +156,23 @@ fn db_query() -> Result<()> {
     // malformed query should result in error.
     assert!(db.query("actor \"Julie Delpy\"", false).is_err());
 
-    let paths = db.query("actor=\"julie delpy\"", true)?;
+    let paths = db.query("actor==\"julie delpy\"", true)?;
     assert!(paths.is_empty());
 
-    let paths = db.query("genre=ROMANCE", true)?;
+    let paths = db.query("genre==ROMANCE", true)?;
     assert!(paths.is_empty());
 
-    let paths = db.query("genre=rOMANCE", false)?
+    let paths = db.query("genre==rOMANCE", false)?
         .into_iter().map(|(path, _)| path).collect::<Vec<_>>();
     assert_eq!(paths, &[
         "/media/hdd/film/Before Sunrise (1995)",
+        "/media/hdd/film/Before Sunset (2004)",
+    ]);
+
+    let paths = db.query("genre=romance and actor=deLpY and not genre=slice", false)?
+        .into_iter().map(|(path, _)| path).collect::<Vec<_>>();
+
+    assert_eq!(paths, &[
         "/media/hdd/film/Before Sunset (2004)",
     ]);
 

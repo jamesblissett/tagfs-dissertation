@@ -11,7 +11,7 @@ FROM TagMapping \
 WHERE \
 ";
 
-static SQL_PARTIAL_EQ_VALUE: &str = "\
+static SQL_PARTIAL_STRICT_EQ_VALUE: &str = "\
 TagMapping.Path IN ( \
     SELECT TagMapping.Path \
     FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
@@ -19,7 +19,7 @@ TagMapping.Path IN ( \
     COLLATE NOCASE \
 )";
 
-static SQL_PARTIAL_EQ_VALUE_CASE_SENS: &str = "\
+static SQL_PARTIAL_STRICT_EQ_VALUE_CASE_SENS: &str = "\
 TagMapping.Path IN ( \
     SELECT TagMapping.Path \
     FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
@@ -41,6 +41,14 @@ TagMapping.Path IN ( \
     WHERE Tag.Name = ? \
 )";
 
+static SQL_PARTIAL_EQ_VALUE: &str = "\
+TagMapping.Path IN ( \
+    SELECT TagMapping.Path \
+    FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
+    WHERE Tag.Name = ? AND TagMapping.Value LIKE ('%' || ? || '%') ESCAPE '\\' \
+    COLLATE NOCASE \
+)";
+
 /// A lexed token.
 #[derive(Debug, PartialEq)]
 enum Token {
@@ -49,6 +57,7 @@ enum Token {
     And,
     Or,
     Not,
+    StrictEquals,
     Equals,
     LessThan,
     GreaterThan,
@@ -59,7 +68,8 @@ enum Token {
 impl Token {
     /// Returns whether this token is a comparison operator.
     const fn is_comparison_operator(&self) -> bool {
-        matches!(&self, Self::Equals | Self::LessThan | Self::GreaterThan)
+        matches!(&self, Self::StrictEquals | Self::Equals | Self::LessThan
+            | Self::GreaterThan)
     }
 }
 
@@ -89,7 +99,13 @@ fn lex_query(query: &str) -> Vec<Token> {
 
             // after any comparison operator we should see a value.
             '=' | '>' | '<' => {
-                if c == '=' { tokens.push(Token::Equals) }
+                if c == '=' {
+                    if chars.next_if(|&c| c == '=').is_some() {
+                        tokens.push(Token::StrictEquals)
+                    } else {
+                        tokens.push(Token::Equals)
+                    }
+                }
                 else if c == '<' { tokens.push(Token::LessThan) }
                 else if c == '>' { tokens.push(Token::GreaterThan) }
 
@@ -160,7 +176,8 @@ fn lex_query(query: &str) -> Vec<Token> {
 }
 
 // TODO: implement less than and greater than.
-// TODO: implement a less strict match.
+// TODO: for the unstrict match use deunicode to match unicode chars with
+// ascii. We can store a column in the database with this search data.
 // TODO: implement proper query building errors.
 /// Convert a stream of tokens into an SQL query.
 ///
@@ -184,18 +201,35 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
             // a value, or it stands alone.
             Tag(tag) => {
                 match windows.next_if(|t| t.is_comparison_operator()) {
-                    Some(Equals) => {
+                    Some(StrictEquals) => {
                         let value = windows.next_if(|t| matches!(t, Value(_)));
                         if let Some(Value(value)) = value {
 
                             if case_sensitive {
-                                sql.push_str(SQL_PARTIAL_EQ_VALUE_CASE_SENS);
+                                sql.push_str(SQL_PARTIAL_STRICT_EQ_VALUE_CASE_SENS);
                             } else {
-                                sql.push_str(SQL_PARTIAL_EQ_VALUE);
+                                sql.push_str(SQL_PARTIAL_STRICT_EQ_VALUE);
                             }
 
                             params.push(tag.clone());
                             params.push(value.clone());
+                        } else {
+                            bail!("expected value after = operator.");
+                        }
+                    }
+                    // non-strict equals is always case insensitive regardless
+                    // of the user flag.
+                    Some(Equals) => {
+                        let value = windows.next_if(|t| matches!(t, Value(_)));
+                        if let Some(Value(value)) = value {
+
+                            let escaped_value = value.replace('%', "\\%")
+                                .replace('_', "\\_");
+
+                            sql.push_str(SQL_PARTIAL_EQ_VALUE);
+
+                            params.push(tag.clone());
+                            params.push(escaped_value);
                         } else {
                             bail!("expected value after = operator.");
                         }
@@ -247,7 +281,7 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
             Value(_) => {
                 bail!("unexpected value.");
             }
-            Equals | LessThan | GreaterThan => {
+            StrictEquals | Equals | LessThan | GreaterThan => {
                 bail!("unexpected comparison operator.");
             }
         }
@@ -269,7 +303,7 @@ pub struct TagValuePairParseError;
 
 impl std::fmt::Display for TagValuePairParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "not in the required tag(=value)? format. Only alphanumeric ASCII characters are allowed in the tag name.")
+        write!(f, "not in the required tag(=value)? format.")
     }
 }
 
