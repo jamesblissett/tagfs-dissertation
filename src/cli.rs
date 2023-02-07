@@ -58,6 +58,27 @@ pub struct UntagCommand {
     pub tag: Option<TagValuePair>,
 }
 
+/// Handles the autotag command args.
+#[cfg(feature = "autotag")]
+#[derive(clap::Args, Clone, Debug)]
+pub struct AutotagCommand {
+    /// Path to directory to autotag.
+    #[arg(required = true, value_name = "path")]
+    pub path: String,
+}
+
+/// Handles the prefix command args.
+#[derive(clap::Args, Clone, Debug)]
+pub struct PrefixCommand {
+    /// Prefix to change.
+    #[arg(required = true, value_name = "old-prefix")]
+    pub old_prefix: String,
+
+    /// New prefix.
+    #[arg(required = true, value_name = "new-prefix")]
+    pub new_prefix: String,
+}
+
 /// Contains a subcommand and the specific struct pertaining to it.
 #[derive(clap::Subcommand, Debug)]
 pub enum Command {
@@ -77,12 +98,21 @@ pub enum Command {
     #[command(visible_alias = "mnt", visible_alias = "m")]
     Mount(MountCommand),
 
-    /// Display tags associated with a path
+    /// Display tags associated with a path.
     Tags(TagsCommand),
 
     /// Query the database.
     #[command(visible_alias = "q", visible_alias = "search")]
     Query(QueryCommand),
+
+    /// Autotag a directory tree.
+    #[cfg(feature = "autotag")]
+    Autotag(AutotagCommand),
+
+    /// Modify the prefix of paths in the database.
+    ///
+    /// Implemented as a naïve search and replace.
+    Prefix(PrefixCommand),
 }
 
 /// Contains the parsed arguments from the command line.

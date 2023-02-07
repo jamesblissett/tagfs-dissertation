@@ -6,14 +6,17 @@ use std::io::Write;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use log::{error, trace};
+use log::{error, warn, trace};
 
 use libtagfs::db::{Database, TagValuePair};
 
 use cli::{
-    Args, Command, MountCommand, QueryCommand, TagCommand, TagsCommand,
-    UntagCommand,
+    Args, Command, MountCommand, PrefixCommand, QueryCommand, TagCommand,
+    TagsCommand, UntagCommand,
 };
+
+#[cfg(feature = "autotag")]
+use cli::AutotagCommand;
 
 /// The default log level if RUST_LOG is not set.
 static DEFAULT_LOG_LEVEL: &str = "info";
@@ -31,8 +34,6 @@ fn init_logging() {
         .init();
 }
 
-// TODO: implement a 'prefix' system so that we don't have to give full paths
-//       to tag. Maybe a Settings (key, value) table in SQLite?
 /// Tag subcommand entry point.
 fn tag_main(command: TagCommand, mut db: Database) -> Result<()> {
     let tag = command.tag;
@@ -53,6 +54,7 @@ fn untag_main(command: UntagCommand, mut db: Database) -> Result<()> {
     }
 }
 
+/// Query subcommand entry point.
 fn query_main(command: QueryCommand, mut db: Database) -> Result<()> {
     let query = command.query;
 
@@ -62,7 +64,7 @@ fn query_main(command: QueryCommand, mut db: Database) -> Result<()> {
         bail!("no paths found matching query \"{}\".", query);
     }
 
-    for path in &paths {
+    for (path, _) in &paths {
         println!("{path}");
     }
 
@@ -103,28 +105,43 @@ fn tags_specific_path_main(path: &str, mut db: Database) -> Result<()> {
 /// Mount subcommand entry point.
 fn mount_main(command: MountCommand, db: Database) -> Result<()> {
 
-    // populate_db(&mut db)?;
-
     libtagfs::fs::mount(&command.mount_point, db)
         .context("an unexpected fuse error occured. Please check the log for more details.")?;
 
     Ok(())
 }
 
-// /// Debugging function to generate test data.
-// fn populate_db(db: &mut Database) -> Result<()> {
+/// Prefix subcommand entry point.
+fn prefix_main(command: PrefixCommand, mut db: Database) -> Result<()> {
+    db.prefix_change(&command.old_prefix, &command.new_prefix)
+}
 
-//     // Ignore result deliberate debug.
-//     db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("romance"));
-//     db.tag("/media/hdd/film/Before Sunrise (1995)", "genre", Some("slice-of-life"));
-//     db.tag("/media/hdd/film/Before Sunset (2004)", "genre", Some("romance"));
-//     db.tag("/media/hdd/film/Casino (1995)", "genre", Some("crime"));
-//     db.tag("/media/hdd/film/Heat (1995)", "genre", Some("crime"));
+#[cfg(feature = "autotag")]
+/// Autotag subcommand entry point.
+fn autotag_main(command: AutotagCommand, mut db: Database) -> Result<()> {
 
-//     db.tag("/media/hdd/film/Before Sunrise (1995)", "favourite", None);
+    // if we are given a file rather a directory, walkdir will just return the
+    // file so we do not need to do anything special to handle this case.
+    let root = command.path;
 
-//     Ok(())
-// }
+    // recursively walk the directory given to us by the user.
+    // we are only interested in files, not directories.
+    let entries = walkdir::WalkDir::new(root).follow_links(true).into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.metadata().ok()
+            .filter(|metadata| metadata.is_file()).is_some());
+
+    for entry in entries {
+        let path = entry.path();
+        if let Some(path) = path.to_str() {
+            db.autotag(path)?;
+        } else {
+            warn!("ignoring path \"{}\" due to invalid UTF-8.", path.display());
+        }
+    }
+
+    Ok(())
+}
 
 /// Helper function to display and log an error.
 fn display_and_log_error<T>(res: Result<T>) {
@@ -164,6 +181,10 @@ fn main() {
         Command::Tags(TagsCommand { path: None, .. } ) =>
             tags_all_main(db),
         Command::Query(query_command) => query_main(query_command, db),
+        Command::Prefix(prefix_command) => prefix_main(prefix_command, db),
+
+        #[cfg(feature = "autotag")]
+        Command::Autotag(autotag_command) => autotag_main(autotag_command, db),
     };
 
     display_and_log_error(err);

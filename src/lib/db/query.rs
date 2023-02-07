@@ -6,7 +6,7 @@ mod tests;
 use anyhow::{bail, Result};
 
 static SQL_PARTIAL_SELECT_START: &str = "\
-SELECT DISTINCT TagMapping.Path \
+SELECT TagMapping.Path, TagMapping.TagMappingID \
 FROM TagMapping \
 WHERE \
 ";
@@ -253,6 +253,9 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
         }
     }
 
+    // we group by the path to ensure we only get one match for each path
+    sql.push_str(" GROUP BY TagMapping.Path");
+
     // this is insertion order, due to the incrementing behaviour of the key.
     sql.push_str(" ORDER BY TagMapping.TagMappingID");
 
@@ -294,11 +297,11 @@ impl std::str::FromStr for TagValuePair {
             [Token::Tag(tag), Token::Equals, Token::Value(value)] => {
                 let tag = std::mem::take(tag);
                 let value = Some(std::mem::take(value));
-                Ok(TagValuePair { tag, value })
+                Ok(Self { tag, value })
             }
             [Token::Tag(tag)] => {
                 let tag = std::mem::take(tag);
-                Ok(TagValuePair { tag, value: None })
+                Ok(Self { tag, value: None })
             }
             _ => Err(TagValuePairParseError),
         }
@@ -317,12 +320,13 @@ impl Query {
 
     /// Runs the query on the provided database and returns the list of paths
     /// that match.
-    pub fn execute(self, db: &mut super::Database) -> Result<Vec<String>> {
+    pub fn execute(self, db: &mut super::Database) -> Result<Vec<(String, u64)>> {
         let mut stmt = db.conn.prepare_cached(&self.sql)?;
         let params = rusqlite::params_from_iter(self.params);
 
-        let paths = stmt.query_map(params, |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let paths = stmt.query_map(params, |row| {
+            Ok((row.get::<_, String>(0)?, row.get(1)?))
+        })?.collect::<rusqlite::Result<Vec<_>>>()?;
 
         Ok(paths)
     }

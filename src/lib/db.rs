@@ -4,6 +4,7 @@ mod query;
 pub use query::TagValuePair;
 
 use anyhow::{bail, Context, Result};
+use log::{info};
 use rusqlite::Connection;
 
 /// Analogue to the database table.
@@ -17,16 +18,15 @@ pub struct Tag {
 /// Analogue to the database table.
 #[derive(Debug)]
 pub struct TagMapping {
-    id: i64,
+    _id: i64,
     pub tag: Tag,
     pub path: String,
     pub value: Option<String>
 }
 
-/// Newtype wrapper struct to print a tag mapping. \
-/// A newtype is used (rather than implementing Display directly on TagMapping)
-/// because it allows the easy creation of multiple differing Display
-/// implementations.
+/// Newtype wrapper struct to print a tag mapping. \ A newtype is used (rather
+/// than implementing [`std::fmt::Display`] directly on [`TagMapping`]) because
+/// it allows the easy creation of multiple differing Display implementations.
 pub struct SimpleTagFormatter<'a>(pub &'a TagMapping);
 impl<'a> std::fmt::Display for SimpleTagFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -46,6 +46,32 @@ pub struct Database {
 }
 
 impl Database {
+
+    fn init(&self) -> Result<()> {
+        self.conn.execute("PRAGMA foreign_keys = ON", [])?;
+
+        self.initialise_tables()?;
+
+        // remove unused tags if they are no longer referenced.
+        // "OLD" references the row that was just deleted.
+        self.conn.execute(
+            "CREATE TRIGGER IF NOT EXISTS
+             RemoveUnusedTags AFTER DELETE ON TagMapping
+             BEGIN
+                DELETE FROM Tag
+                WHERE
+                    Tag.TagID = OLD.TagID
+                    AND NOT EXISTS(
+                        SELECT TRUE
+                        FROM TagMapping
+                        WHERE TagMapping.TagID = OLD.TagID);
+             END",
+            []
+        )?;
+
+        Ok(())
+    }
+
     fn initialise_tables(&self) -> Result<()> {
         self.conn.execute_batch("CREATE TABLE IF NOT EXISTS Tag (
             TagID INTEGER PRIMARY KEY,
@@ -68,6 +94,7 @@ impl Database {
             Path TEXT NOT NULL,
             TagID INTEGER NOT NULL,
             Value TEXT,
+            Auto BOOL NOT NULL,
             ValueUniqConstraint GENERATED ALWAYS AS (COALESCE(Value, 'NULL')),
             FOREIGN KEY(TagID) REFERENCES Tag(TagID),
             UNIQUE(TagID, ValueUniqConstraint, Path)
@@ -107,14 +134,20 @@ impl Database {
         })
     }
 
+    /// Helper function to perform a manual tag.
+    pub fn tag(&mut self, path: &str, tag_name: &str, value: Option<&str>) -> Result<()> {
+        self.tag_inner(path, tag_name, value, false)
+    }
+
     /// This function creates a mapping between a tag and a path in the
     /// database.
     ///
     /// It can fail if a mapping already exists with the same tag, path and
     /// value. It can also fail if the tag is required to take a value and one
     /// was not given or the opposite.
-    pub fn tag(&mut self, path: &str, tag_name: &str, value: Option<&str>) -> Result<()> {
-
+    fn tag_inner(&mut self, path: &str, tag_name: &str, value: Option<&str>, auto: bool)
+        -> Result<()>
+    {
         let tag = if let Some(tag) = self.get_tag(tag_name) {
             if tag.takes_value && value.is_none() {
                 bail!("tag \"{}\" takes a value but one was not given", tag_name);
@@ -127,20 +160,20 @@ impl Database {
         };
 
         let mut stmt = self.conn.prepare_cached(
-            "INSERT INTO TagMapping (TagID, Path, Value) VALUES (?, ?, ?)"
+            "INSERT INTO TagMapping (TagID, Path, Value, Auto) VALUES (?, ?, ?, ?)"
         )?;
 
-        let err = stmt.execute(rusqlite::params![tag.id, path, value]);
+        let err = stmt.execute(rusqlite::params![tag.id, path, value, auto]);
         if let Err(rusqlite::Error::SqliteFailure(sql_error, _)) = err {
             // Error code 2067 is a failure of a unique constraint.
             // This means we tried to add a tag that already exists.
             if sql_error.extended_code == 2067 {
                 if let Some(value) = value {
                     err.with_context(||
-                        format!("\"{path}\" already has tag \"{tag_name}\" with value \"{value}\"."))?;
+                        format!("\"{path}\" already has tag \"{tag_name}={value}\"."))?;
                 } else {
                     err.with_context(||
-                        format!("error: \"{path}\" already has tag \"{tag_name}\"."))?;
+                        format!("\"{path}\" already has tag \"{tag_name}\"."))?;
                 }
             } else {
                 err?;
@@ -171,7 +204,7 @@ impl Database {
                         name: row.get(1)?,
                         takes_value: row.get(2)?,
                     },
-                    id: row.get(3)?,
+                    _id: row.get(3)?,
                     path: row.get::<_, String>(4)?,
                     value: row.get(5)?,
                 })
@@ -182,17 +215,19 @@ impl Database {
     }
 
     /// Returns a list of paths tagged with a particular tag.
-    pub fn paths_with_tag(&mut self, tag: &str, value: Option<&str>) -> Result<Vec<String>> {
+    pub fn paths_with_tag(&mut self, tag: &str, value: Option<&str>)
+        -> Result<Vec<(String, u64)>>
+    {
         let mut stmt = if value.is_some() {
             self.conn.prepare_cached(
-                "SELECT TagMapping.Path
+                "SELECT TagMapping.Path, TagMapping.TagMappingID
                 FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
                 WHERE Tag.Name = ? AND TagMapping.Value = ?
                 ORDER BY TagMapping.TagMappingID"
             )?
         } else {
             self.conn.prepare_cached(
-                "SELECT TagMapping.Path
+                "SELECT TagMapping.Path, TagMapping.TagMappingID
                 FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
                 WHERE Tag.Name = ?
                 ORDER BY TagMapping.TagMappingID"
@@ -200,12 +235,14 @@ impl Database {
         };
 
         let tags = if value.is_some() {
-            stmt.query_map(rusqlite::params![tag, value], |row| row.get(0))?
-                .collect::<rusqlite::Result<_>>()?
+            stmt.query_map(rusqlite::params![tag, value],
+                    |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()
         } else {
-            stmt.query_map(rusqlite::params![tag], |row| row.get(0))?
-                .collect::<rusqlite::Result<_>>()?
-        };
+            stmt.query_map(rusqlite::params![tag],
+                    |row| Ok((row.get(0)?, row.get(1)?)))?
+                .collect::<rusqlite::Result<_>>()
+        }?;
 
         Ok(tags)
     }
@@ -241,7 +278,7 @@ impl Database {
     pub fn untag(&mut self, path: &str, tag: &str, value: Option<&str>)
         -> Result<()>
     {
-        if let Some(value) = value {
+        let n = if let Some(value) = value {
             self.conn.execute(
                 "DELETE FROM TagMapping
                  WHERE TagMapping.Path = ? AND
@@ -251,7 +288,7 @@ impl Database {
                         FROM Tag
                         WHERE Tag.Name = ?)",
                 rusqlite::params![path, value, tag]
-            )?;
+            )?
         } else {
             self.conn.execute(
                 "DELETE FROM TagMapping
@@ -261,8 +298,17 @@ impl Database {
                         FROM Tag
                         WHERE Tag.Name = ?)",
                 rusqlite::params![path, tag]
-            )?;
+            )?
+        };
+
+        if n == 0 {
+            if let Some(value) = value {
+                bail!("could not remove tag \"{tag}={value}\" from \"{path}\". Does it exist?");
+            } else {
+                bail!("could not remove tag \"{tag}\" from \"{path}\". Does it exist?");
+            }
         }
+
         Ok(())
     }
 
@@ -278,16 +324,57 @@ impl Database {
 
     /// Build and execute a user query.
     pub fn query(&mut self, query: &str, case_sensitive: bool)
-        -> Result<Vec<String>>
+        -> Result<Vec<(String, u64)>>
     {
         let query = query::Query::from_raw(query, case_sensitive)?;
 
         query.execute(self)
             .map_err(|e| e.context("invalid query."))
     }
+
+    pub fn prefix_change(&mut self, old_prefix: &str, new_prefix: &str)
+        -> Result<()>
+    {
+        let escaped_old_prefix = old_prefix
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+
+        self.conn.execute(
+            "UPDATE TagMapping
+            SET Path = REPLACE(TagMapping.Path, ?, ?)
+            WHERE Path LIKE (? || '%') ESCAPE '\\' ",
+            rusqlite::params![old_prefix, new_prefix, escaped_old_prefix]
+        )?;
+        Ok(())
+    }
+
+    pub fn get_path_from_id(&mut self, tag_mapping_id: u64) -> Result<String> {
+        let path = self.conn.query_row(
+            "SELECT TagMapping.Path
+            FROM TagMapping
+            WHERE TagMapping.TagMappingID = ?",
+            rusqlite::params![tag_mapping_id],
+            |row| row.get(0),
+        )?;
+        Ok(path)
+    }
+
+    #[cfg(feature = "autotag")]
+    /// Generate tags from a path and then push the generated tags to the db.
+    pub fn autotag(&mut self, path: &str) -> Result<()> {
+        let tags = crate::autotag::generate_autotags(path)?;
+
+        info!("Autotagging \"{path}\" with tags:\n{tags:?}");
+
+        for tag in tags {
+            self.tag_inner(path, &tag.tag, tag.value.as_deref(), true)?;
+        }
+
+        Ok(())
+    }
 }
 
-/// Locates an existing TagFS database, or creates and intialises tables in a
+/// Locates an existing tagfs database, or creates and intialises tables in a
 /// new database. \
 /// If path is None the database is created in memory (useful for testing).
 pub fn get_or_create_db(path: Option<&str>) -> Result<Database> {
@@ -299,7 +386,7 @@ pub fn get_or_create_db(path: Option<&str>) -> Result<Database> {
 
     let db = conn.map(|conn| Database { conn })?;
 
-    db.initialise_tables()?;
+    db.init()?;
 
     Ok(db)
 }

@@ -1,12 +1,12 @@
-//! Module that contains the fuse file system for TagFS.
+//! Module that contains the fuse file system for tagfs.
 //!
 //! The general order in which the FUSE functions are called is as follows:
 //!
-//! getattr(inode: FUSE_ROOT_ID) -> FileAttr \
-//! readdir(inode: FUSE_ROOT_ID, offset: 0) -> [(inode, type, name)] \
+//! getattr(inode: [`FUSE_ROOT_ID`]) -> [`fuser::FileAttr`] \
+//! readdir(inode: [`FUSE_ROOT_ID`], offset: 0) -> [(inode, type, name)] \
 //!
 //! Then for each name returned by readdir \
-//! lookup(name: x, parent_inode: FUSE_ROOT_ID) -> FileAttr
+//! lookup(name: x, parent_inode: [`FUSE_ROOT_ID`]) -> [`fuser::FileAttr`]
 
 mod inode_generator;
 mod entries;
@@ -35,6 +35,12 @@ static MOUNT_TIME: Lazy<std::time::SystemTime> = Lazy::new(|| {
 });
 
 /// Filesystem struct that implements the [`fuser::Filesystem`] trait.
+///
+/// Many of the methods for readdir take an optional [`fuser::ReplyDirectory`].
+/// This parameter is optional because it allows us to reuse these methods to
+/// create the internal entries even without a [`fuser::ReplyDirectory`]. This
+/// means we can call the readdir helper methods on lookup() calls so that we
+/// can use their side effects.
 #[derive(Debug)]
 struct TagFS {
     entries: Entries,
@@ -52,17 +58,17 @@ impl TagFS {
     /// Helper function to reply with the root directory entries.
     fn readdir_root(&mut self, offset: i64, mut reply: Option<ReplyDirectory>) {
 
+        // the query directory is the first child of the root, so we only need
+        // to return it when offset = 0, otherwise it has already been
+        // returned.
         if offset == 0 {
             let query_dir_inode = self.entries.get_or_create_query_directory();
-            let done = reply.as_mut().map(|reply|
-                reply.add(
-                    query_dir_inode, 1,
-                    FileType::Directory, self.entries.get_name(query_dir_inode)
-                )
-            ).unwrap_or(false);
+            let done = reply.as_mut().map_or(false, |reply|
+                reply.add(query_dir_inode, 1, FileType::Directory,
+                    self.entries.get_name(query_dir_inode)));
 
             if done {
-                reply.map(|reply| reply.ok());
+                if let Some(reply) = reply { reply.ok() }
                 return;
             }
         }
@@ -73,17 +79,14 @@ impl TagFS {
                 FUSE_ROOT_ID, tag
             );
 
-            let done = reply.as_mut().map(|reply|
-                reply.add(
-                    child_inode, (idx + 2) as i64,
-                    FileType::Directory, tag
-                )
-            ).unwrap_or(false);
+            // we add two to the index to account for the query directory.
+            let done = reply.as_mut().map_or(false, |reply|
+                reply.add(child_inode, (idx + 2) as i64,
+                    FileType::Directory, tag));
 
             if done { break; }
         }
-
-        reply.map(|reply| reply.ok());
+        if let Some(reply) = reply { reply.ok() }
     }
 
     /// Helper function to reply with the entries for a particular tag value
@@ -92,24 +95,23 @@ impl TagFS {
                      offset: i64, mut reply: Option<ReplyDirectory>)
     {
         if let Ok(children) = self.db.paths_with_tag(tag, value) {
-            for (idx, child) in children.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, children.iter());
+            for (idx, (child, child_id)) in children.iter().enumerate().skip(offset as usize) {
+                let display_name = sanitise_path(child, children.iter().map(|(child, _)| child));
                 let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
                     child_inode
                 } else {
-                    self.entries.create_link(
-                        inode, display_name.as_ref(), child.as_ref()
-                    )
+                    self.entries.create_link(inode, display_name.as_ref(),
+                        *child_id, child.len() as u64)
                 };
 
-                let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
-                    FileType::Symlink, display_name.as_str()
-                )).unwrap_or(false);
+                let done = reply.as_mut().map_or(false, |reply|
+                    reply.add(child_inode, (idx + 1) as i64,
+                        FileType::Symlink, display_name.as_str()));
 
                 if done { break; }
             }
         }
-        reply.map(|reply| reply.ok());
+        if let Some(reply) = reply { reply.ok() }
     }
 
     /// Helper function to reply with all the values for a particular tag.
@@ -122,17 +124,18 @@ impl TagFS {
                 let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
                     child_inode
                 } else {
-                    self.entries.get_or_create_value_directory(inode, display_name.as_ref())
+                    self.entries.get_or_create_value_directory(inode,
+                        display_name.as_ref())
                 };
 
-                let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
-                    FileType::Directory, display_name.as_str()
-                )).unwrap_or(false);
+                let done = reply.as_mut().map_or(false, |reply|
+                    reply.add(child_inode, (idx + 1) as i64,
+                        FileType::Directory, display_name.as_str()));
 
                 if done { break; }
             }
         }
-        reply.map(|reply| reply.ok());
+        if let Some(reply) = reply { reply.ok() }
     }
 
     /// Helper function to look up the root inode and create its children if
@@ -140,7 +143,11 @@ impl TagFS {
     fn lookup_root_child(&mut self, parent: u64, name: &str, reply: ReplyEntry)
         -> Option<u64>
     {
-        let matches_tag = self.db.all_tags().unwrap().iter().any(|tag| tag == name);
+        let matches_tag = self.db.all_tags()
+            .map_or(false, |tags| tags.iter().any(|tag| tag == name));
+
+        // the children of the root directory are either the name of a tag, or
+        // the query directory.
         if matches_tag {
             let inode = self.entries.get_or_create_tag_directory(parent, name);
             reply.entry(&TTL, self.entries.get_attr(inode), 0);
@@ -165,25 +172,25 @@ impl TagFS {
         // the else case _should_ never happen because we have
         // already rejected any invalid queries.
         if let Ok(paths) = self.db.query(query, false) {
-            for (idx, child) in paths.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, paths.iter());
+            for (idx, (child, child_id)) in paths.iter().enumerate().skip(offset as usize) {
+                let display_name = sanitise_path(child, paths.iter().map(|(child, _)| child));
                 let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
                     child_inode
                 } else {
                     self.entries.create_link(
-                        inode, display_name.as_ref(), child.as_ref()
+                        inode, display_name.as_ref(), *child_id, child.len() as u64
                     )
                 };
 
-                let done = reply.as_mut().map(|reply| reply.add(child_inode, (idx + 1) as i64,
-                    FileType::Symlink, display_name.as_str()
-                )).unwrap_or(false);
+                let done = reply.as_mut().map_or(false, |reply|
+                    reply.add(child_inode, (idx + 1) as i64,
+                        FileType::Symlink, display_name.as_str()));
 
                 if done { break; }
             }
         }
 
-        reply.map(|reply| reply.ok());
+        if let Some(reply) = reply { reply.ok() }
     }
 
     /// Helper function that is called by both readdir and lookup.
@@ -217,7 +224,7 @@ impl TagFS {
 
                 // query dir should always look empty to readdir.
                 EntryType::QueryDir => {
-                    reply.map(|reply| reply.ok());
+                    if let Some(reply) = reply { reply.ok() }
                 }
 
                 EntryType::QueryResultDir => {
@@ -270,14 +277,14 @@ impl fuser::Filesystem for TagFS {
                 reply.error(libc::ENOENT);
             } else {
                 let inode = self.entries.get_or_create_query_result_dir(name);
-                let attr = self.entries.get_attr(inode).clone();
+                let attr = *self.entries.get_attr(inode);
 
                 self.readdir_helper(inode, 0, None);
                 reply.entry(&TTL, &attr, 0);
             }
 
         } else if let Some(inode) = self.entries.try_get_inode(parent, name) {
-            let attr = self.entries.get_attr(inode).clone();
+            let attr = *self.entries.get_attr(inode);
 
             self.readdir_helper(inode, 0, None);
 
@@ -302,18 +309,23 @@ impl fuser::Filesystem for TagFS {
 
     fn readlink(&mut self, _req: &Request, inode: u64, reply: ReplyData) {
         info!("readlink(inode: {inode:#x?})");
-        if let Some(target) = self.entries.get_link_target(inode) {
-            reply.data(target.as_bytes());
-        } else {
-            error!("could not find link target for inode: {inode:#x?}.");
-            panic!("could not find link target for inode: {inode:#x?}.");
+        if let Some(tag_mapping_id) = self.entries.get_link_target(inode) {
+            if let Ok(target) = self.db.get_path_from_id(tag_mapping_id) {
+                reply.data(target.as_bytes());
+                return;
+            }
         }
+        error!("could not find link target for inode: {inode:#x?}.");
+        panic!("could not find link target for inode: {inode:#x?}.");
     }
 }
 
 /// Call this function with a path to mount the filesystem.
 ///
 /// Blocks until the filesystem is unmounted.
+///
+/// # Errors
+/// Returns an error if one is thrown by FUSE.
 pub fn mount(mnt_point: &str, db: Database) -> std::io::Result<()> {
     info!("Mounting filesystem at \"{mnt_point}\"");
 

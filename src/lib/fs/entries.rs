@@ -8,27 +8,35 @@ use log::error;
 use crate::fs::INodeGenerator;
 use crate::fs::MOUNT_TIME;
 
+/// Hardcoded name of the query directory.
 static QUERY_DIR_NAME: &str = "?";
 
+/// Each inode is one and only one of the types described in [`Entry`].
 #[derive(Debug)]
 enum Entry {
+    /// Root inode - should only ever be one. Path /.
     Root {
         attr: FileAttr,
     },
+    /// QueryDirectory inode - should only ever be one. Path: /?.
     QueryDir {
         attr: FileAttr,
     },
+    /// Path: /?/query
     QueryResultDir {
         name: String, attr: FileAttr,
     },
+    /// Path: /tag
     TagDir {
         name: String, attr: FileAttr,
     },
+    /// Path: /tag/value
     ValueDir {
         name: String, tag: String, attr: FileAttr,
     },
+    /// Symlink to a real file.
     Link {
-        name: String, target: String, attr: FileAttr,
+        name: String, target: u64, attr: FileAttr,
     }
 }
 
@@ -44,7 +52,9 @@ pub enum EntryType {
 }
 
 #[derive(Debug)]
+/// Tracks the mapping of inodes to entries.
 pub struct Entries {
+    /// generates a unique inode.
     inode_generator: INodeGenerator,
 
     /// inode -> Entry
@@ -79,12 +89,11 @@ impl Entries {
                 blksize: 512,
             }});
 
-        let entries = Self {
+        Self {
             inode_generator: INodeGenerator::new(),
             names: HashMap::new(),
             attrs,
-        };
-        entries
+        }
     }
 
     /// Returns the inode of the query directory, or creates it if it does not
@@ -231,7 +240,7 @@ impl Entries {
 
     /// Create and store attributes for a tag symlink.
     pub fn create_link(&mut self, parent_inode: u64, name: &str,
-                       target: &str) -> u64
+                       target: u64, target_len: u64) -> u64
     {
         let children = self.names.entry(parent_inode).or_default();
         let inode = self.inode_generator.next();
@@ -240,10 +249,10 @@ impl Entries {
 
         self.attrs.insert(inode, Entry::Link {
             name: name.to_string(),
-            target: target.to_string(),
+            target,
             attr: FileAttr {
                 ino: inode,
-                size: target.len() as u64,
+                size: target_len,
                 blocks: 0,
                 atime: *MOUNT_TIME,
                 mtime: *MOUNT_TIME,
@@ -273,7 +282,7 @@ impl Entries {
 
     /// Get the parent tag associated with a value by inode.
     ///
-    /// This is only valid when called with an Entry::ValueDir inode.
+    /// This is only valid when called with an [`Entry::ValueDir`] inode.
     pub fn get_parent_tag(&self, inode: u64) -> &str {
         if let Some(entry) = self.attrs.get(&inode) {
             if let Entry::ValueDir { tag, .. } = entry {
@@ -289,14 +298,14 @@ impl Entries {
     }
 
     /// Get the target of a link by inode.
-    pub fn get_link_target(&self, inode: u64) -> Option<&str> {
+    pub fn get_link_target(&self, inode: u64) -> Option<u64> {
         self.attrs.get(&inode).map(|entry| {
             match entry {
                 Entry::Root { .. } | Entry::QueryDir { .. }
                 | Entry::QueryResultDir { .. } | Entry::TagDir { .. }
                 | Entry::ValueDir { .. } =>
                     panic!("programming error - directory is not a link and has no target."),
-                Entry::Link { target, .. } => target.as_str(),
+                Entry::Link { target, .. } => *target,
             }
         })
     }
@@ -308,12 +317,12 @@ impl Entries {
     pub fn get_attr(&self, inode: u64) -> &FileAttr {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
-                Entry::Root { attr } => attr,
-                Entry::QueryDir { attr } => attr,
-                Entry::QueryResultDir { attr, .. } => attr,
-                Entry::TagDir { attr, .. } => attr,
-                Entry::ValueDir { attr, .. } => attr,
-                Entry::Link { attr, .. } => attr,
+                Entry::Root { attr }
+                | Entry::QueryDir { attr }
+                | Entry::QueryResultDir { attr, .. }
+                | Entry::TagDir { attr, .. }
+                | Entry::ValueDir { attr, .. }
+                | Entry::Link { attr, .. } => attr,
             }
         } else {
             error!("tried to lookup non existent inode: {inode:#x?}.");
@@ -330,10 +339,11 @@ impl Entries {
             match entry {
                 Entry::Root { .. } => "/",
                 Entry::QueryDir { .. } => QUERY_DIR_NAME,
-                Entry::QueryResultDir { name, .. } => name,
-                Entry::TagDir { name, .. } => name,
-                Entry::ValueDir { name, .. } => name,
-                Entry::Link { name, .. } => name,
+
+                Entry::QueryResultDir { name, .. }
+                | Entry::TagDir { name, .. }
+                | Entry::ValueDir { name, .. }
+                | Entry::Link { name, .. } => name,
             }
         } else {
             error!("tried to lookup non existent inode: {inode:#x?}.");
