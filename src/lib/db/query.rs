@@ -49,6 +49,20 @@ TagMapping.Path IN ( \
     COLLATE NOCASE \
 )";
 
+static SQL_PARTIAL_LT_VALUE: &str = "\
+TagMapping.Path IN ( \
+    SELECT TagMapping.Path \
+    FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
+    WHERE Tag.Name = ? AND TagMapping.Value < ? \
+)";
+
+static SQL_PARTIAL_GT_VALUE: &str = "\
+TagMapping.Path IN ( \
+    SELECT TagMapping.Path \
+    FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
+    WHERE Tag.Name = ? AND TagMapping.Value > ? \
+)";
+
 /// A lexed token.
 #[derive(Debug, PartialEq)]
 enum Token {
@@ -214,7 +228,7 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
                             params.push(tag.clone());
                             params.push(value.clone());
                         } else {
-                            bail!("expected value after = operator.");
+                            bail!("expected value after == operator.");
                         }
                     }
                     // non-strict equals is always case insensitive regardless
@@ -237,7 +251,10 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
                     Some(GreaterThan) => {
                         let value = windows.next_if(|t| matches!(t, Value(_)));
                         if let Some(Value(value)) = value {
-                            eprintln!("{tag} > {value}");
+                            sql.push_str(SQL_PARTIAL_GT_VALUE);
+
+                            params.push(tag.clone());
+                            params.push(value.clone());
                         } else {
                             bail!("expected value after > operator.");
                         }
@@ -245,7 +262,10 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
                     Some(LessThan) => {
                         let value = windows.next_if(|t| matches!(t, Value(_)));
                         if let Some(Value(value)) = value {
-                            eprintln!("{tag} < {value}");
+                            sql.push_str(SQL_PARTIAL_LT_VALUE);
+
+                            params.push(tag.clone());
+                            params.push(value.clone());
                         } else {
                             bail!("expected value after < operator.");
                         }

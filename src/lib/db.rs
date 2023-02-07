@@ -314,11 +314,16 @@ impl Database {
 
     /// Remove all tags from a path.
     pub fn untag_all(&mut self, path: &str) -> Result<()> {
-        self.conn.execute(
+        let n = self.conn.execute(
             "DELETE FROM TagMapping
             WHERE TagMapping.Path = ?",
             rusqlite::params![path]
         )?;
+
+        if n == 0 {
+            bail!("could not remove tags from path \"{path}\". Does it exist?");
+        }
+
         Ok(())
     }
 
