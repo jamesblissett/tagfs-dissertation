@@ -116,9 +116,12 @@ fn prefix_main(command: PrefixCommand, mut db: Database) -> Result<()> {
     db.prefix_change(&command.old_prefix, &command.new_prefix)
 }
 
+// TODO: ensure path exists.
 #[cfg(feature = "autotag")]
 /// Autotag subcommand entry point.
 fn autotag_main(command: AutotagCommand, mut db: Database) -> Result<()> {
+
+    let autotagger = libtagfs::autotag::AutoTagger::new(command.tmdb_key);
 
     // if we are given a file rather a directory, walkdir will just return the
     // file so we do not need to do anything special to handle this case.
@@ -134,7 +137,7 @@ fn autotag_main(command: AutotagCommand, mut db: Database) -> Result<()> {
     for entry in entries {
         let path = entry.path();
         if let Some(path) = path.to_str() {
-            db.autotag(path)?;
+            autotagger.autotag(path, &mut db)?;
         } else {
             warn!("ignoring path \"{}\" due to invalid UTF-8.", path.display());
         }

@@ -3,4 +3,4 @@ pub mod db;
 pub mod fs;
 
 #[cfg(feature = "autotag")]
-mod autotag;
+pub mod autotag;

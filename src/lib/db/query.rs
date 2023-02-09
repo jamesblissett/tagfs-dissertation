@@ -87,6 +87,7 @@ impl Token {
     }
 }
 
+// TODO: disallow forward slashes in tags and values.
 /// Lex a raw query string into tokens.
 ///
 /// # Warning
@@ -359,6 +360,30 @@ impl std::str::FromStr for TagValuePair {
             }
             _ => Err(TagValuePairParseError),
         }
+    }
+}
+
+impl std::fmt::Display for TagValuePair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(value) = &self.value {
+            write!(f, "{}={}", self.tag, value)
+        } else {
+            write!(f, "{}", self.tag)
+        }
+    }
+}
+
+pub struct TagValuePairListFormatter<'a>(pub &'a [TagValuePair]);
+impl<'a> std::fmt::Display for TagValuePairListFormatter<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(tag) = self.0.first() {
+            write!(f, "\"{tag}\"")?;
+
+            for tag in self.0.iter().skip(1) {
+                write!(f, ", \"{tag}\"")?;
+            }
+        }
+        Ok(())
     }
 }
 

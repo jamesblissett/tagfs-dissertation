@@ -307,12 +307,17 @@ impl fuser::Filesystem for TagFS {
         }
     }
 
+    // returns the target for a given link inode.
     fn readlink(&mut self, _req: &Request, inode: u64, reply: ReplyData) {
         info!("readlink(inode: {inode:#x?})");
         if let Some(tag_mapping_id) = self.entries.get_link_target(inode) {
             if let Ok(target) = self.db.get_path_from_id(tag_mapping_id) {
                 reply.data(target.as_bytes());
                 return;
+            } else {
+                // If we cannot find the target this means the path has been
+                // untagged and then retagged with the same thing and we are
+                // holding on to the old tagmappingid that no longer exists.
             }
         }
         error!("could not find link target for inode: {inode:#x?}.");

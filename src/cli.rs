@@ -62,9 +62,16 @@ pub struct UntagCommand {
 #[cfg(feature = "autotag")]
 #[derive(clap::Args, Clone, Debug)]
 pub struct AutotagCommand {
-    /// Path to directory to autotag.
+    /// Path to directory or file to autotag.
     #[arg(required = true, value_name = "path")]
     pub path: String,
+
+    /// TMDB API key.
+    ///
+    /// Only required when autotagging films. If not provided the TMDB_KEY
+    /// environment variable is used instead.
+    #[arg(long = "tmdb-key", value_name = "tmdb-api-key")]
+    pub tmdb_key: Option<String>,
 }
 
 /// Handles the prefix command args.
@@ -116,7 +123,7 @@ pub enum Command {
     #[command(visible_alias = "q", visible_alias = "search")]
     Query(QueryCommand),
 
-    /// Autotag a directory tree.
+    /// Autotag a directory tree or file.
     #[cfg(feature = "autotag")]
     Autotag(AutotagCommand),
 

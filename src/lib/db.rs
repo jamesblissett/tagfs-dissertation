@@ -2,9 +2,9 @@
 
 mod query;
 pub use query::TagValuePair;
+pub use query::TagValuePairListFormatter;
 
 use anyhow::{bail, Context, Result};
-use log::{info};
 use rusqlite::Connection;
 
 /// Analogue to the database table.
@@ -24,9 +24,11 @@ pub struct TagMapping {
     pub value: Option<String>
 }
 
-/// Newtype wrapper struct to print a tag mapping. \ A newtype is used (rather
-/// than implementing [`std::fmt::Display`] directly on [`TagMapping`]) because
-/// it allows the easy creation of multiple differing Display implementations.
+/// Newtype wrapper struct to print a tag mapping.
+///
+/// A newtype is used (rather than implementing [`std::fmt::Display`] directly
+/// on [`TagMapping`]) because it allows the easy creation of multiple
+/// differing Display implementations.
 pub struct SimpleTagFormatter<'a>(pub &'a TagMapping);
 impl<'a> std::fmt::Display for SimpleTagFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -208,8 +210,7 @@ impl Database {
                     path: row.get::<_, String>(4)?,
                     value: row.get(5)?,
                 })
-            }
-        )?.collect::<rusqlite::Result<_>>()?;
+            })?.collect::<rusqlite::Result<_>>()?;
 
         Ok(tags)
     }
@@ -365,17 +366,11 @@ impl Database {
     }
 
     #[cfg(feature = "autotag")]
-    /// Generate tags from a path and then push the generated tags to the db.
-    pub fn autotag(&mut self, path: &str) -> Result<()> {
-        let tags = crate::autotag::generate_autotags(path)?;
-
-        info!("Autotagging \"{path}\" with tags:\n{tags:?}");
-
-        for tag in tags {
-            self.tag_inner(path, &tag.tag, tag.value.as_deref(), true)?;
-        }
-
-        Ok(())
+    /// Helper function to autotag a path.
+    pub fn autotag(&mut self, path: &str, tag_name: &str, value: Option<&str>)
+        -> Result<()>
+    {
+        self.tag_inner(path, tag_name, value.as_deref(), true)
     }
 }
 
