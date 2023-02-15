@@ -4,7 +4,10 @@ mod query;
 pub use query::TagValuePair;
 pub use query::TagValuePairListFormatter;
 
+mod edit_repr;
+
 use anyhow::{bail, Context, Result};
+use indexmap::map::IndexMap;
 use rusqlite::Connection;
 
 /// Analogue to the database table.
@@ -187,18 +190,80 @@ impl Database {
         Ok(())
     }
 
-    /// Returns a list of the tags for a particular path.
-    pub fn tags(&mut self, path: &str) -> Result<Vec<TagMapping>> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT
-                Tag.TagID, Tag.Name, Tag.TakesValue,
-                TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value
-            FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
-            WHERE TagMapping.Path = ?
-            ORDER BY TagMapping.TagMappingID"
-        )?;
+    pub fn to_edit_repr(&self, out: &mut impl std::fmt::Write) -> Result<()> {
+        edit_repr::to_edit_repr(self, out)
+    }
 
-        let tags = stmt.query_map(rusqlite::params![path],
+    pub fn from_edit_repr(&mut self, input: &mut impl std::io::BufRead)
+        -> Result<()>
+    {
+        let path_map = edit_repr::from_edit_repr(input)?;
+
+        // TODO: It is probably better to be smarter about this and not just
+        //       drop the entire table. It would be useful if we could make
+        //       this more granular.
+        // NOTE: should not be necessary to clear the Tag table because the
+        //       trigger should have already wiped it, but better to be safe
+        //       than sorry.
+        self.conn.execute_batch("
+            DELETE FROM TagMapping;
+            DELETE FROM Tag;
+        ")?;
+
+        for (path, tags) in path_map.into_iter() {
+            for tag in tags.into_iter() {
+                // NOTE: this obliterates all autotags and labels them as
+                // normal tags.
+                self.tag(&path, &tag.tag, tag.value.as_deref())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns all tagmappings.
+    fn dump(&self) -> Result<IndexMap<String, Vec<TagValuePair>>> {
+        let rows = self.tags_inner(None)?;
+        let mut path_map: IndexMap<String, Vec<TagValuePair>> = IndexMap::new();
+        for row in rows.into_iter() {
+            path_map.entry(row.path).or_default().push(TagValuePair {
+                tag: row.tag.name,
+                value: row.value,
+            });
+        }
+        Ok(path_map)
+    }
+
+    /// Returns a list of the tags for a particular path.
+    pub fn tags(&self, path: &str) -> Result<Vec<TagMapping>> {
+        self.tags_inner(Some(path))
+    }
+
+    /// Returns a list of the tags for a particular path.
+    fn tags_inner(&self, path: Option<&str>) -> Result<Vec<TagMapping>> {
+        let mut params = Vec::new();
+
+        let mut stmt = if let Some(path) = path {
+            params.push(path);
+            self.conn.prepare_cached(
+                "SELECT
+                    Tag.TagID, Tag.Name, Tag.TakesValue,
+                    TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value
+                FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
+                WHERE TagMapping.Path = ?
+                ORDER BY TagMapping.TagMappingID"
+            )
+        } else {
+            self.conn.prepare_cached(
+                "SELECT
+                    Tag.TagID, Tag.Name, Tag.TakesValue,
+                    TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value
+                FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
+                ORDER BY TagMapping.TagMappingID"
+            )
+        }?;
+
+        let tags = stmt.query_map(rusqlite::params_from_iter(&params),
             |row| {
                 Ok(TagMapping {
                     tag: Tag {

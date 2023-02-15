@@ -2,7 +2,9 @@
 
 mod cli;
 
-use std::io::Write;
+use std::{
+    ffi::OsString, io::Write, str::FromStr
+};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -11,8 +13,8 @@ use log::{error, warn, trace};
 use libtagfs::db::{Database, TagValuePair};
 
 use cli::{
-    Args, Command, MountCommand, PrefixCommand, QueryCommand, TagCommand,
-    TagsCommand, UntagCommand,
+    Args, Command, EditCommand, MountCommand, PrefixCommand, QueryCommand,
+    TagCommand, TagsCommand, UntagCommand,
 };
 
 #[cfg(feature = "autotag")]
@@ -34,12 +36,14 @@ fn init_logging() {
         .init();
 }
 
+// TODO: reject relative paths.
 /// Tag subcommand entry point.
 fn tag_main(command: TagCommand, mut db: Database) -> Result<()> {
-    let tag = command.tag;
     let path = command.path.trim_end_matches('/');
 
-    db.tag(path, &tag.tag, tag.value.as_deref())?;
+    for tag in &command.tags {
+        db.tag(path, &tag.tag, tag.value.as_deref())?;
+    }
     Ok(())
 }
 
@@ -87,7 +91,7 @@ fn tags_all_main(mut db: Database) -> Result<()> {
 }
 
 /// Tags subcommand entry point when a path argument is given.
-fn tags_specific_path_main(path: &str, mut db: Database) -> Result<()> {
+fn tags_specific_path_main(path: &str, db: Database) -> Result<()> {
     let path = path.trim_end_matches('/');
     let tags = db.tags(path)?;
 
@@ -116,7 +120,49 @@ fn prefix_main(command: PrefixCommand, mut db: Database) -> Result<()> {
     db.prefix_change(&command.old_prefix, &command.new_prefix)
 }
 
-// TODO: ensure path exists.
+/// Edit subcommand entry point
+fn edit_main(_command: EditCommand, mut db: Database) -> Result<()> {
+
+    let mut out = String::new();
+    db.to_edit_repr(&mut out)?;
+
+    let temp_file = mktemp::Temp::new_file()
+        .context("could not create temporary file to edit.")?;
+
+    std::fs::write(&temp_file, out).with_context(||
+        format!("could not write to temporary file \"{}\".", temp_file.display()))?;
+
+    // allow user to edit text here.
+    //   make temp file.
+    //   launch $EDITOR on temp file.
+    //   wait until editor process ends
+    //   read temp file
+
+    // naïvely check bytewise if the file has changed and do nothing if it has
+    // not.
+
+    let exit_status = std::process::Command::new(get_editor())
+        .arg(temp_file.as_os_str())
+        .status()
+        .context("failed to start an editor. Please set $EDITOR or $VISUAL to your preferred editor.")?;
+
+    if !exit_status.success() {
+        bail!("editor did not exit cleanly, aborting...");
+    }
+
+    let file = std::fs::File::open(&temp_file).with_context(||
+        format!("could not open temporary file \"{}\" for reading.", temp_file.display()))?;
+
+    db.from_edit_repr(&mut std::io::BufReader::new(file))?;
+
+    // the temp file from the mktemp crate is deleted on drop (explicit drop
+    // for clarity)
+    drop(temp_file);
+
+    Ok(())
+}
+
+// TODO: ensure path exists and inform user if not.
 #[cfg(feature = "autotag")]
 /// Autotag subcommand entry point.
 fn autotag_main(command: AutotagCommand, mut db: Database) -> Result<()> {
@@ -164,6 +210,12 @@ fn unwrap_or_exit<T>(res: Result<T>) -> T {
     }
 }
 
+fn get_editor() -> OsString {
+    std::env::var_os("VISUAL")
+        .or_else(|| std::env::var_os("EDITOR"))
+        .unwrap_or_else(|| OsString::from_str("nano").unwrap())
+}
+
 /// Entry point.
 fn main() {
     init_logging();
@@ -185,6 +237,7 @@ fn main() {
             tags_all_main(db),
         Command::Query(query_command) => query_main(query_command, db),
         Command::Prefix(prefix_command) => prefix_main(prefix_command, db),
+        Command::Edit(edit_command) => edit_main(edit_command, db),
 
         #[cfg(feature = "autotag")]
         Command::Autotag(autotag_command) => autotag_main(autotag_command, db),

@@ -46,6 +46,11 @@ impl AutoTagger {
                 Self::apply_tags(path, tags.as_slice(), db)?;
             }
 
+        } else if ext == "png" || ext == "jpg" || ext == "tif" {
+            if let Ok(tags) = generate_image_tags(path) {
+                Self::apply_tags(path, tags.as_slice(), db)?;
+            }
+
         } else if ext == "mkv" || ext == "mp4" {
             // file_stem is filename without extension.
             let Some(film) = path_p.file_stem() else { return Ok(()) };
@@ -328,4 +333,29 @@ fn get_cast_and_crew_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
     }
 
     Ok(())
+}
+
+fn generate_image_tags(path: &str) -> Result<Vec<TagValuePair>> {
+    let mut tags = Vec::new();
+
+    let file = std::fs::File::open(path)?;
+    let mut file_reader = std::io::BufReader::new(file);
+
+    let exif = exif::Reader::new()
+        .read_from_container(&mut file_reader)?;
+
+    let taken_at = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
+        .and_then(|field| {
+            let value = field.display_value().to_string();
+            chrono::NaiveDateTime::parse_from_str(&value, "%Y-%m-%d %H:%M:%S").ok()
+        });
+
+    if let Some(taken_at) = taken_at {
+        tags.push(TagValuePair {
+            tag: String::from("taken-on"),
+            value: Some(taken_at.format("%Y-%m-%d").to_string())
+        });
+    }
+
+    Ok(tags)
 }

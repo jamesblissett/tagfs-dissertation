@@ -190,7 +190,6 @@ fn lex_query(query: &str) -> Vec<Token> {
     tokens
 }
 
-// TODO: implement less than and greater than.
 // TODO: for the unstrict match use deunicode to match unicode chars with
 // ascii. We can store a column in the database with this search data.
 // TODO: implement proper query building errors.
@@ -373,6 +372,44 @@ impl std::fmt::Display for TagValuePair {
     }
 }
 
+/// Implements a version of display for a TagValuePair where the value of tags
+/// are correctly escaped.
+pub struct EscapedTagFormatter<'a>(pub &'a TagValuePair);
+impl<'a> std::fmt::Display for EscapedTagFormatter<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.value.is_some() {
+            write!(f, "{}=", self.0.tag)?;
+            self.write_escaped_value(f)
+        } else {
+            write!(f, "{}", self.0.tag)
+        }
+    }
+}
+
+impl<'a> EscapedTagFormatter<'a> {
+
+    /// Helper function to write an escaped value to a formatter.
+    ///
+    /// # Panics
+    /// Panics when the inner TagValuePair has no value.
+    fn write_escaped_value(&self, f: &mut std::fmt::Formatter<'_>)
+        -> std::fmt::Result
+    {
+        if self.0.value.is_none() {
+            panic!("programming error: tried to format value when value is none!");
+        }
+
+        for c in self.0.value.as_ref().unwrap().chars() {
+            match c {
+                '"' | ' ' | '\\' => write!(f, "\\{}", c)?,
+                c => write!(f, "{}", c)?,
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Wrapper struct to implement Display on a list of TagValuePair.
 pub struct TagValuePairListFormatter<'a>(pub &'a [TagValuePair]);
 impl<'a> std::fmt::Display for TagValuePairListFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

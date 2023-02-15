@@ -96,8 +96,8 @@ impl TagFS {
     {
         if let Ok(children) = self.db.paths_with_tag(tag, value) {
             for (idx, (child, child_id)) in children.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, children.iter().map(|(child, _)| child));
-                let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
+                let display_name = sanitise_path(child, idx, children.iter().map(|(child, _)| child));
+                let child_inode = if let Some(child_inode) = self.entries.try_get_link_inode(inode, display_name.as_ref(), *child_id) {
                     child_inode
                 } else {
                     self.entries.create_link(inode, display_name.as_ref(),
@@ -120,7 +120,7 @@ impl TagFS {
     {
         if let Ok(children) = self.db.values(tag) {
             for (idx, child) in children.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, children.iter());
+                let display_name = sanitise_path(child, idx, children.iter());
                 let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
                     child_inode
                 } else {
@@ -173,8 +173,8 @@ impl TagFS {
         // already rejected any invalid queries.
         if let Ok(paths) = self.db.query(query, false) {
             for (idx, (child, child_id)) in paths.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, paths.iter().map(|(child, _)| child));
-                let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
+                let display_name = sanitise_path(child, idx, paths.iter().map(|(child, _)| child));
+                let child_inode = if let Some(child_inode) = self.entries.try_get_link_inode(inode, display_name.as_ref(), *child_id) {
                     child_inode
                 } else {
                     self.entries.create_link(
@@ -315,9 +315,10 @@ impl fuser::Filesystem for TagFS {
                 reply.data(target.as_bytes());
                 return;
             } else {
-                // If we cannot find the target this means the path has been
-                // untagged and then retagged with the same thing and we are
-                // holding on to the old tagmappingid that no longer exists.
+                // FIXME: If we cannot find the target this means the path has
+                // been untagged and then retagged with the same thing and we
+                // are holding on to the old tagmappingid that no longer
+                // exists.
             }
         }
         error!("could not find link target for inode: {inode:#x?}.");
@@ -347,17 +348,59 @@ pub fn mount(mnt_point: &str, db: Database) -> std::io::Result<()> {
     fuser::mount2(tagfs, mnt_point, mnt_options)
 }
 
-// TODO: update this function to take into account the fact that we cannot have
-// files with the same name in the same directory.
-// Once this is done this function will be a good candidate for some tests :)
 /// Converts a full path (such as "my/long/path") to its final component.
-fn sanitise_path<T: AsRef<str>>(path: &str, _siblings: impl Iterator<Item=T>)
-    -> String
+fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
+                                siblings: impl Iterator<Item=T>) -> String
 {
-    let path = std::path::Path::new(path);
-    if let Some(file_name) = path.file_name() {
-        String::from(file_name.to_string_lossy())
+
+    fn basename(path: &str) -> std::borrow::Cow<str> {
+        let path = std::path::Path::new(path);
+        let Some(file_name) = path.file_name() else {
+            panic!("invalid path \"{}\" without final component.", path.display());
+        };
+
+        file_name.to_string_lossy()
+    }
+
+    let path_basename = basename(path);
+
+    let any_path_same_name = siblings.enumerate()
+        .any(|(idx, sibling)|
+            idx != path_idx && basename(sibling.as_ref()) == path_basename);
+
+    if any_path_same_name {
+        format!("{path_basename}.{path_idx}")
     } else {
-        String::from("unknown")
+        String::from(path_basename)
+    }
+}
+
+mod tests {
+    #[test]
+    fn sanitise_path_test() {
+        let path1 = "/my/long/file/path.txt";
+        let path2 = "/my/other/long/file/path.txt";
+        let path3 = "/some/other/file/path.txt";
+        let siblings = vec![path2, "/some/other/file", path3];
+
+        assert_eq!(
+            super::sanitise_path(path1, 0, siblings.iter()),
+            String::from("path.txt.0")
+        );
+
+        let siblings = vec![path1, "/some/other/file", path3];
+        assert_eq!(
+            super::sanitise_path(path2, 1, siblings.iter()),
+            String::from("path.txt.1")
+        );
+
+        let path = "/a/very/cool/path.txt";
+        let siblings = vec![
+            path, "/some/unrelated/other/path.rs", "/another/random/path.jpg"
+        ];
+        assert_eq!(
+            super::sanitise_path(path, 0, siblings.iter()),
+            String::from("path.txt")
+        );
     }
 }

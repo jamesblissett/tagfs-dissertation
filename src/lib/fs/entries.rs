@@ -36,7 +36,10 @@ enum Entry {
     },
     /// Symlink to a real file.
     Link {
-        name: String, target: u64, attr: FileAttr,
+        name: String,
+        /// References TagMappingID in the database.
+        target: u64,
+        attr: FileAttr,
     }
 }
 
@@ -278,6 +281,23 @@ impl Entries {
     {
         self.names.get(&parent_inode).and_then(|children|
             children.get(name).copied())
+    }
+
+    /// Attempt to return the inode of the requested entry, if it cannot be
+    /// found return None. Also ensure that is a link entry and it matches the
+    /// target tag_mapping_id. This way we will never reuse old entries with
+    /// invalid tag_mapping_ids.
+    pub fn try_get_link_inode(&self, parent_inode: u64, name: &str,
+                         tag_mapping_id: u64) -> Option<u64>
+    {
+        let inode = self.try_get_inode(parent_inode, name);
+
+        inode
+            .and_then(|inode| self.attrs.get(&inode))
+            .and_then(|entry| match entry {
+                Entry::Link { target, .. } if *target == tag_mapping_id => inode,
+                _ => None,
+            })
     }
 
     /// Get the parent tag associated with a value by inode.

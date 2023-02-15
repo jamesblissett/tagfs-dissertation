@@ -26,8 +26,8 @@ pub struct TagCommand {
     pub path: String,
 
     /// Tag and optional value to apply to path tag(=value)?
-    #[arg(required = true, value_name = "tag")]
-    pub tag: TagValuePair,
+    #[arg(required = true, value_name = "tags")]
+    pub tags: Vec<TagValuePair>,
 }
 
 /// Handles the mount command args.
@@ -86,6 +86,11 @@ pub struct PrefixCommand {
     pub new_prefix: String,
 }
 
+/// Handles the prefix command args.
+#[derive(clap::Args, Clone, Debug)]
+pub struct EditCommand {
+}
+
 /// Contains a subcommand and the specific struct pertaining to it.
 #[derive(clap::Subcommand, Debug)]
 pub enum Command {
@@ -131,6 +136,9 @@ pub enum Command {
     ///
     /// Implemented as a naïve search and replace.
     Prefix(PrefixCommand),
+
+    /// Edit the tags database using a text editor.
+    Edit(EditCommand),
 }
 
 /// Contains the parsed arguments from the command line.

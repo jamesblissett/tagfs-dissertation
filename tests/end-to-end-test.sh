@@ -67,7 +67,7 @@ tagfs tag "${tmp_tree}/film/Heat (1995)" 'genre=crime'
 
 assert_exists "${tmp_mount_point}/?/genre=romance and genre=crime/True Romance (1993)"
 
-if [ "$(tagfs query --case-sensitive 'genre=ROMaNce' 2> /dev/null)" ]; then
+if [ "$(tagfs query --case-sensitive 'genre==ROMaNce' 2> /dev/null)" ]; then
     printf "%s: fail: query returned rows when shouldn't have.\n" "${LINENO}" 1>&2
     exit 1
 fi
