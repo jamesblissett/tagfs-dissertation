@@ -18,7 +18,7 @@ anyhow = "1.*"
 audiotags = { version = "0.4.*", optional = true }
 chrono = { version = "0.4.*", optional = true }
 clap = { version = "4.*", features = ["cargo", "derive"] }
-constcat = { version = "0.3.*", optional = true}
+constcat = { version = "0.3.*", optional = true }
 env_logger = { version = "0.*", default-features = false }
 fuser = "0.*"
 indexmap = "1.*"

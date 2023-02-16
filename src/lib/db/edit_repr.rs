@@ -16,7 +16,7 @@
 
 use std::str::FromStr;
 
-use anyhow::{Result, Context};
+use anyhow::{bail, Result, Context};
 use indexmap::map::IndexMap;
 
 use super::{Database, TagValuePair, query::EscapedTagFormatter};
@@ -34,6 +34,7 @@ const COMMENT_PREFIX: &str = "//";
 /// Writes the contents of the database to the out buffer in the edit
 /// representation format.
 pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write) -> Result<()> {
+    writeln!(out, "{COMMENT_PREFIX} {} v{}", clap::crate_name!(), clap::crate_version!())?;
     writeln!(out, "{COMMENT_PREFIX} You can edit this file as you please, but bear in mind to escape double")?;
     writeln!(out, "{COMMENT_PREFIX} quotes and spaces in tag values (or use double quotes around the value).")?;
     writeln!(out, "{COMMENT_PREFIX}")?;
@@ -94,35 +95,43 @@ pub fn from_edit_repr(input: &mut impl std::io::BufRead)
         if buf.ends_with('\n') { buf.pop(); }
 
         // skip any blank lines or comments.
-        if buf.is_empty() || buf.chars().all(|c| c.is_whitespace())
-            || buf.starts_with(COMMENT_PREFIX)
+        if buf.is_empty() || buf.starts_with(COMMENT_PREFIX)
+            || buf.chars().all(|c| c.is_whitespace())
         {
             // pass
 
         // if block has ended.
-        } else if buf == LINE_SEPARATOR && inside_block {
+        } else if inside_block && buf == LINE_SEPARATOR {
             inside_block = false;
+            auto = false;
 
             // insert the accumulated tags into the map with key path.
+            // NOTE: the append method empties the vec given to it.
             if let Some(path) = path.take() {
                 path_map.entry(path).or_default().append(&mut tags);
             }
 
         // if block has just started.
-        } else if buf == LINE_SEPARATOR {
+        } else if !inside_block && buf == LINE_SEPARATOR {
             inside_block = true;
 
-        } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR {
+        } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR && auto {
+            bail!("cannot have multiple AUTO sections in one block. Line {line_num}")
+
+        } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR && !auto {
             auto = true;
 
         } else if inside_block && path.is_none() {
             path = Some(buf.clone())
 
-        } else if inside_block {
+        } else if inside_block && path.is_some() {
             let tag = TagValuePair::from_str(&buf).with_context(||
-                format!("could not parse tag on line {}.", line_num))?;
+                format!("could not parse tag on line {line_num}."))?;
 
             tags.push((auto, tag));
+
+        } else if !inside_block {
+            bail!("cannot have non empty lines outside of a block. Line {line_num}")
         }
 
         // make sure to reset the buffer before the next iteration.

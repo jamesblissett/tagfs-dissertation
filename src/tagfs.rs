@@ -3,7 +3,7 @@
 mod cli;
 
 use std::{
-    ffi::OsString, io::Write, str::FromStr
+    ffi::OsString, io::{Write, Read}, str::FromStr
 };
 
 use anyhow::{bail, Context, Result};
@@ -109,6 +109,10 @@ fn tags_specific_path_main(path: &str, db: Database) -> Result<()> {
 /// Mount subcommand entry point.
 fn mount_main(command: MountCommand, db: Database) -> Result<()> {
 
+    if !db.all_paths_valid()? {
+        warn!("The database contains invalid paths. Mounting anyway...");
+    }
+
     libtagfs::fs::mount(&command.mount_point, db)
         .context("an unexpected fuse error occured. Please check the log for more details.")?;
 
@@ -123,13 +127,13 @@ fn prefix_main(command: PrefixCommand, mut db: Database) -> Result<()> {
 /// Edit subcommand entry point
 fn edit_main(_command: EditCommand, mut db: Database) -> Result<()> {
 
-    let mut out = String::new();
-    db.to_edit_repr(&mut out)?;
+    let mut initial_dump = String::new();
+    db.to_edit_repr(&mut initial_dump)?;
 
     let temp_file = mktemp::Temp::new_file()
         .context("could not create temporary file to edit.")?;
 
-    std::fs::write(&temp_file, out).with_context(||
+    std::fs::write(&temp_file, &initial_dump).with_context(||
         format!("could not write to temporary file \"{}\".", temp_file.display()))?;
 
     // allow user to edit text here.
@@ -150,10 +154,19 @@ fn edit_main(_command: EditCommand, mut db: Database) -> Result<()> {
         bail!("editor did not exit cleanly, aborting...");
     }
 
-    let file = std::fs::File::open(&temp_file).with_context(||
+    let mut file = std::fs::File::open(&temp_file).with_context(||
         format!("could not open temporary file \"{}\" for reading.", temp_file.display()))?;
 
-    db.from_edit_repr(&mut std::io::BufReader::new(file))?;
+    // preallocating the edited string to be at least the same size as the
+    // initial string - might save a few allocations.
+    let mut edited_dump = String::with_capacity(initial_dump.len());
+    file.read_to_string(&mut edited_dump)?;
+
+    if edited_dump == initial_dump {
+        bail!("nothing changed, aborting...");
+    }
+
+    db.from_edit_repr(&mut std::io::BufReader::new(edited_dump.as_bytes()))?;
 
     // the temp file from the mktemp crate is deleted on drop (explicit drop
     // for clarity)
@@ -196,7 +209,7 @@ fn autotag_main(command: AutotagCommand, mut db: Database) -> Result<()> {
 fn display_and_log_error<T>(res: Result<T>) {
     if let Err(e) = res {
         error!("error: {e:?}");
-        eprintln!("tagfs: {e}");
+        eprintln!("{}: {e}", clap::crate_name!());
     }
 }
 

@@ -431,6 +431,21 @@ impl Database {
         Ok(path)
     }
 
+    pub fn all_paths_valid(&self) -> Result<bool> {
+        let mut stmt = self.conn.prepare_cached("
+            SELECT DISTINCT TagMapping.Path FROM TagMapping
+        ")?;
+
+        let all_valid = stmt.query_map([], |row| row.get::<_, String>(0))?
+            .all(|path| if let Ok(path) = path {
+                std::path::Path::new(&path).exists()
+            } else {
+                false
+            });
+
+        Ok(all_valid)
+    }
+
     #[cfg(feature = "autotag")]
     /// Helper function to autotag a path.
     pub fn autotag(&mut self, path: &str, tag_name: &str, value: Option<&str>)
@@ -444,8 +459,7 @@ impl Database {
 /// new database. \
 /// If path is None the database is created in memory (useful for testing).
 pub fn get_or_create_db(path: Option<&str>) -> Result<Database> {
-    let conn = path.map_or_else(|| Connection::open_in_memory(),
-        |path| Connection::open(path));
+    let conn = path.map_or_else(Connection::open_in_memory, Connection::open);
 
     let db = conn.map(|conn| Database { conn })?;
 
