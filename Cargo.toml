@@ -39,3 +39,8 @@ autotag = [
     "dep:walkdir", "dep:audiotags", "dep:ureq", "dep:serde_json", "dep:regex",
     "dep:constcat", "dep:kamadak-exif", "dep:chrono",
 ]
+
+[profile.release]
+strip = true
+lto = "fat"
+codegen-units = 1

@@ -199,9 +199,9 @@ fn get_remote_film_tags(title: &str, year: &str, tmdb_key: &str,
         .query("query", title)
         .query("year", year)
         .call()
-        .with_context(|| format!("failed to call the TMDB api. Is the network okay?"))?
+        .context("failed to call the TMDB api. Is the network okay?")?
         .into_json()
-        .with_context(|| format!("failed to convert TMDB response into JSON. Is the network okay?"))?;
+        .context("failed to convert TMDB response into JSON. Is the network okay?")?;
 
     let results = matches.get("results")
         .and_then(|results| results.as_array());
@@ -251,9 +251,9 @@ fn get_main_film_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
     let film_info: serde_json::Value = agent.get(&film_url)
         .query("api_key", tmdb_key)
         .call()
-        .with_context(|| format!("failed to call the TMDB api. Is the network okay?"))?
+        .context("failed to call the TMDB api. Is the network okay?")?
         .into_json()
-        .with_context(|| format!("failed to convert TMDB response into JSON. Is the network okay?"))?;
+        .context("failed to convert TMDB response into JSON. Is the network okay?")?;
 
     // dbg!(&film_info);
 
@@ -274,7 +274,7 @@ fn get_main_film_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
             genre.get("name").and_then(|genre| genre.as_str())));
 
     if let Some(ref mut genres) = genres {
-        while let Some(genre) = genres.next() {
+        for genre in genres {
             tags.push(TagValuePair {
                 tag: String::from("genre"),
                 value: Some(genre.to_lowercase())
@@ -293,9 +293,9 @@ fn get_cast_and_crew_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
     let film_credits: serde_json::Value = agent.get(&film_credits_url)
         .query("api_key", tmdb_key)
         .call()
-        .with_context(|| format!("failed to call the TMDB api. Is the network okay?"))?
+        .context("failed to call the TMDB api. Is the network okay?")?
         .into_json()
-        .with_context(|| format!("failed to convert TMDB response into JSON. Is the network okay?"))?;
+        .context("failed to convert TMDB response into JSON. Is the network okay?")?;
 
     let mut directors = film_credits.get("crew")
         .and_then(|crew| crew.as_array())
@@ -309,7 +309,7 @@ fn get_cast_and_crew_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
             )));
 
     if let Some(ref mut directors) = directors {
-        while let Some(director) = directors.next() {
+        for director in directors {
             tags.push(TagValuePair {
                 tag: String::from("director"),
                 value: Some(String::from(director))
@@ -323,8 +323,7 @@ fn get_cast_and_crew_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
             person.get("name").and_then(|name| name.as_str())));
 
     if let Some(ref mut actors) = actors {
-        let mut actors = actors.take(5);
-        while let Some(actor) = actors.next() {
+        for actor in actors.take(5) {
             tags.push(TagValuePair {
                 tag: String::from("actor"),
                 value: Some(String::from(actor))

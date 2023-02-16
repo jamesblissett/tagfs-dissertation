@@ -435,7 +435,7 @@ impl Database {
     pub fn autotag(&mut self, path: &str, tag_name: &str, value: Option<&str>)
         -> Result<()>
     {
-        self.tag_inner(path, tag_name, value.as_deref(), true)
+        self.tag_inner(path, tag_name, value, true)
     }
 }
 
@@ -443,11 +443,8 @@ impl Database {
 /// new database. \
 /// If path is None the database is created in memory (useful for testing).
 pub fn get_or_create_db(path: Option<&str>) -> Result<Database> {
-    let conn = if let Some(path) = path {
-        Connection::open(path)
-    } else {
-        Connection::open_in_memory()
-    };
+    let conn = path.map_or_else(|| Connection::open_in_memory(),
+        |path| Connection::open(path));
 
     let db = conn.map(|conn| Database { conn })?;
 
