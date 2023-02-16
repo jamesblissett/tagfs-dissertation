@@ -24,7 +24,8 @@ pub struct TagMapping {
     _id: i64,
     pub tag: Tag,
     pub path: String,
-    pub value: Option<String>
+    pub value: Option<String>,
+    pub auto: bool,
 }
 
 /// Newtype wrapper struct to print a tag mapping.
@@ -197,6 +198,8 @@ impl Database {
     pub fn from_edit_repr(&mut self, input: &mut impl std::io::BufRead)
         -> Result<()>
     {
+        // make sure to check the user input is valid before we drop the entire
+        // database :)
         let path_map = edit_repr::from_edit_repr(input)?;
 
         // TODO: It is probably better to be smarter about this and not just
@@ -211,10 +214,8 @@ impl Database {
         ")?;
 
         for (path, tags) in path_map.into_iter() {
-            for tag in tags.into_iter() {
-                // NOTE: this obliterates all autotags and labels them as
-                // normal tags.
-                self.tag(&path, &tag.tag, tag.value.as_deref())?;
+            for (auto, tag) in tags.into_iter() {
+                self.tag_inner(&path, &tag.tag, tag.value.as_deref(), auto)?;
             }
         }
 
@@ -222,14 +223,11 @@ impl Database {
     }
 
     /// Returns all tagmappings.
-    fn dump(&self) -> Result<IndexMap<String, Vec<TagValuePair>>> {
+    fn dump(&self) -> Result<IndexMap<String, Vec<TagMapping>>> {
         let rows = self.tags_inner(None)?;
-        let mut path_map: IndexMap<String, Vec<TagValuePair>> = IndexMap::new();
+        let mut path_map: IndexMap<String, Vec<TagMapping>> = IndexMap::new();
         for row in rows.into_iter() {
-            path_map.entry(row.path).or_default().push(TagValuePair {
-                tag: row.tag.name,
-                value: row.value,
-            });
+            path_map.entry(row.path.clone()).or_default().push(row);
         }
         Ok(path_map)
     }
@@ -248,7 +246,8 @@ impl Database {
             self.conn.prepare_cached(
                 "SELECT
                     Tag.TagID, Tag.Name, Tag.TakesValue,
-                    TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value
+                    TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value,
+                    TagMapping.Auto
                 FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
                 WHERE TagMapping.Path = ?
                 ORDER BY TagMapping.TagMappingID"
@@ -257,7 +256,8 @@ impl Database {
             self.conn.prepare_cached(
                 "SELECT
                     Tag.TagID, Tag.Name, Tag.TakesValue,
-                    TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value
+                    TagMapping.TagMappingID, TagMapping.Path, TagMapping.Value,
+                    TagMapping.Auto
                 FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID
                 ORDER BY TagMapping.TagMappingID"
             )
@@ -274,6 +274,7 @@ impl Database {
                     _id: row.get(3)?,
                     path: row.get::<_, String>(4)?,
                     value: row.get(5)?,
+                    auto: row.get(6)?,
                 })
             })?.collect::<rusqlite::Result<_>>()?;
 

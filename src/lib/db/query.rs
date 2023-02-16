@@ -374,19 +374,19 @@ impl std::fmt::Display for TagValuePair {
 
 /// Implements a version of display for a TagValuePair where the value of tags
 /// are correctly escaped.
-pub struct EscapedTagFormatter<'a>(pub &'a TagValuePair);
-impl<'a> std::fmt::Display for EscapedTagFormatter<'a> {
+pub struct EscapedTagFormatter<'a, X: AsRef<str>, Y: AsRef<str>>(pub &'a X, pub Option<&'a Y>);
+impl<'a, X: AsRef<str>, Y: AsRef<str>> std::fmt::Display for EscapedTagFormatter<'a, X, Y> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0.value.is_some() {
-            write!(f, "{}=", self.0.tag)?;
+        if self.1.is_some() {
+            write!(f, "{}=", self.0.as_ref())?;
             self.write_escaped_value(f)
         } else {
-            write!(f, "{}", self.0.tag)
+            write!(f, "{}", self.0.as_ref())
         }
     }
 }
 
-impl<'a> EscapedTagFormatter<'a> {
+impl<'a, X: AsRef<str>, Y: AsRef<str>> EscapedTagFormatter<'a, X, Y> {
 
     /// Helper function to write an escaped value to a formatter.
     ///
@@ -395,11 +395,11 @@ impl<'a> EscapedTagFormatter<'a> {
     fn write_escaped_value(&self, f: &mut std::fmt::Formatter<'_>)
         -> std::fmt::Result
     {
-        if self.0.value.is_none() {
+        if self.1.is_none() {
             panic!("programming error: tried to format value when value is none!");
         }
 
-        for c in self.0.value.as_ref().unwrap().chars() {
+        for c in self.1.unwrap().as_ref().chars() {
             match c {
                 '"' | ' ' | '\\' => write!(f, "\\{}", c)?,
                 c => write!(f, "{}", c)?,
