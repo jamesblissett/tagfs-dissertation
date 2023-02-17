@@ -169,7 +169,7 @@ impl TagFS {
     fn readdir_query(&mut self, inode: u64, offset: i64,
                      mut reply: Option<ReplyDirectory>)
     {
-        let query = self.entries.get_name(inode);
+        let query = self.entries.get_query(inode);
         // the else case _should_ never happen because we have
         // already rejected any invalid queries.
         if let Ok(paths) = self.db.query(query, false) {
@@ -189,6 +189,27 @@ impl TagFS {
 
                 if done { break; }
             }
+        }
+
+        if let Some(reply) = reply { reply.ok() }
+    }
+
+    fn readdir_query_dir(&mut self, offset: i64,
+                         mut reply: Option<ReplyDirectory>)
+    {
+        // TODO: put these into the database.
+        let stored_queries = vec![("medium-watch", "runtime > 100 and runtime < 130 and not watched")];
+        let stored_queries = stored_queries.iter()
+            .map(|(name, query)| (format!("{name} @ [{query}]"), query));
+
+        for (idx, (name, query)) in stored_queries.enumerate().skip(offset as usize) {
+            let child_inode = self.entries.get_or_create_query_result_dir(query, &name);
+
+            let done = reply.as_mut().map_or(false, |reply|
+                reply.add(child_inode, (idx + 1) as i64,
+                    FileType::Symlink, &name));
+
+            if done { break; }
         }
 
         if let Some(reply) = reply { reply.ok() }
@@ -224,9 +245,9 @@ impl TagFS {
                     self.readdir_files(&tag_name, Some(&value), inode, offset, reply);
                 }
 
-                // query dir should always look empty to readdir.
+                // query dir contains stored queries and nothing else.
                 EntryType::QueryDir => {
-                    if let Some(reply) = reply { reply.ok() }
+                    self.readdir_query_dir(offset, reply);
                 }
 
                 EntryType::QueryResultDir => {
@@ -273,12 +294,15 @@ impl fuser::Filesystem for TagFS {
                 self.readdir_helper(inode, 0, None);
             }
         } else if parent == self.entries.get_or_create_query_directory() {
-            info!("Running database query \"{name}\".");
 
-            if self.db.query(name, false).is_err() {
+            let inode = self.entries.get_or_create_query_result_dir(name, name);
+            let query = self.entries.get_query(inode);
+
+            info!("Running database query \"{query}\".");
+            if self.db.query(query, false).is_err() {
                 reply.error(libc::ENOENT);
+
             } else {
-                let inode = self.entries.get_or_create_query_result_dir(name);
                 let attr = *self.entries.get_attr(inode);
 
                 self.readdir_helper(inode, 0, None);
@@ -316,11 +340,6 @@ impl fuser::Filesystem for TagFS {
             if let Ok(target) = self.db.get_path_from_id(tag_mapping_id) {
                 reply.data(target.as_bytes());
                 return;
-            } else {
-                // FIXME: If we cannot find the target this means the path has
-                // been untagged and then retagged with the same thing and we
-                // are holding on to the old tagmappingid that no longer
-                // exists.
             }
         }
         error!("could not find link target for inode: {inode:#x?}.");

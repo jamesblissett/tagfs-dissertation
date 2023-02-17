@@ -24,7 +24,7 @@ enum Entry {
     },
     /// Path: /?/query
     QueryResultDir {
-        name: String, attr: FileAttr,
+        display_name: String, query: String, attr: FileAttr,
     },
     /// Path: /tag
     TagDir {
@@ -134,7 +134,8 @@ impl Entries {
 
     /// Returns the inode of a query result directory, or creates it if it does
     /// not exist.
-    pub fn get_or_create_query_result_dir(&mut self, name: &str) -> u64
+    pub fn get_or_create_query_result_dir(&mut self, query: &str, name: &str)
+        -> u64
     {
         let query_dir_inode = self.get_or_create_query_directory();
         let children = self.names.entry(query_dir_inode).or_default();
@@ -145,7 +146,8 @@ impl Entries {
             children.insert(name.to_string(), inode);
 
             self.attrs.insert(inode, Entry::QueryResultDir {
-                name: name.to_string(),
+                display_name: name.to_string(),
+                query: query.to_string(),
                 attr: FileAttr {
                     ino: inode,
                     size: 0,
@@ -307,15 +309,11 @@ impl Entries {
     pub fn get_parent_tag(&self, inode: u64) -> &str {
         if let Some(entry) = self.attrs.get(&inode) {
             if let Entry::ValueDir { tag, .. } = entry {
-                tag
-            } else {
-                error!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
-                panic!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
+                return tag;
             }
-        } else {
-            error!("tried to lookup non existent inode: {inode:#x?}.");
-            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
+        error!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
+        panic!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
     }
 
     /// Get the target of a link by inode.
@@ -329,6 +327,17 @@ impl Entries {
                 Entry::Link { target, .. } => *target,
             }
         })
+    }
+
+    /// Get the query related to a [`Entry::QueryResultDir`].
+    pub fn get_query(&self, inode: u64) -> &str {
+        if let Some(entry) = self.attrs.get(&inode) {
+            if let Entry::QueryResultDir { query, .. } = entry {
+                return query;
+            }
+        }
+        error!("tried to lookup query of non QueryResultDir entry: {inode:#x?}.");
+        panic!("tried to lookup query of non QueryResultDir entry: {inode:#x?}.");
     }
 
     /// Get the attributes for an inode.
@@ -361,7 +370,7 @@ impl Entries {
                 Entry::Root { .. } => "/",
                 Entry::QueryDir { .. } => QUERY_DIR_NAME,
 
-                Entry::QueryResultDir { name, .. }
+                Entry::QueryResultDir { display_name: name, .. }
                 | Entry::TagDir { name, .. }
                 | Entry::ValueDir { display_name: name, .. }
                 | Entry::Link { name, .. } => name,
@@ -381,14 +390,12 @@ impl Entries {
     /// this case.
     pub fn get_tag_value(&self, inode: u64) -> &str {
         if let Some(entry) = self.attrs.get(&inode) {
-            if let Entry::ValueDir { value, .. } = entry { value } else {
-                error!("tried to lookup tag value for non ValueDir inode: {inode:#x?}.");
-                panic!("tried to lookup tag value for non ValueDir inode: {inode:#x?}.");
+            if let Entry::ValueDir { value, .. } = entry {
+                return value;
             }
-        } else {
-            error!("tried to lookup non existent inode: {inode:#x?}.");
-            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
+        error!("tried to lookup non existent inode: {inode:#x?}.");
+        panic!("tried to lookup non existent inode: {inode:#x?}.");
     }
 
     /// Get the type of an inode.

@@ -154,6 +154,13 @@ fn generate_music_tags(path: &str) -> Result<Vec<TagValuePair>> {
         });
     }
 
+    if let Some(title) = metadata.title() {
+        tags.push(TagValuePair {
+            tag: String::from("title"),
+            value: Some(title.to_string())
+        });
+    }
+
     Ok(tags)
 }
 
