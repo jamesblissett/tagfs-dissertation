@@ -116,13 +116,13 @@ fn lex_query(query: &str) -> Vec<Token> {
             '=' | '>' | '<' => {
                 if c == '=' {
                     if chars.next_if(|&c| c == '=').is_some() {
-                        tokens.push(Token::StrictEquals)
+                        tokens.push(Token::StrictEquals);
                     } else {
-                        tokens.push(Token::Equals)
+                        tokens.push(Token::Equals);
                     }
                 }
-                else if c == '<' { tokens.push(Token::LessThan) }
-                else if c == '>' { tokens.push(Token::GreaterThan) }
+                else if c == '<' { tokens.push(Token::LessThan); }
+                else if c == '>' { tokens.push(Token::GreaterThan); }
 
                 // Skip leading whitespace
                 while chars.next_if(|&c| c == ' ').is_some() {}
@@ -372,7 +372,7 @@ impl std::fmt::Display for TagValuePair {
     }
 }
 
-/// Implements a version of display for a TagValuePair where the value of tags
+/// Implements a version of display for a [`TagValuePair`] where the value of tags
 /// are correctly escaped.
 pub struct EscapedTagFormatter<'a, X: AsRef<str>, Y: AsRef<str>>(pub &'a X, pub Option<&'a Y>);
 impl<'a, X: AsRef<str>, Y: AsRef<str>> std::fmt::Display for EscapedTagFormatter<'a, X, Y> {
@@ -391,25 +391,24 @@ impl<'a, X: AsRef<str>, Y: AsRef<str>> EscapedTagFormatter<'a, X, Y> {
     /// Helper function to write an escaped value to a formatter.
     ///
     /// # Panics
-    /// Panics when the inner TagValuePair has no value.
+    /// Panics when the inner [`TagValuePair`] has no value.
     fn write_escaped_value(&self, f: &mut std::fmt::Formatter<'_>)
         -> std::fmt::Result
     {
-        if self.1.is_none() {
-            panic!("programming error: tried to format value when value is none!");
-        }
+        assert!(self.1.is_some(),
+            "programming error: tried to format value when value is none!");
 
         for c in self.1.unwrap().as_ref().chars() {
             match c {
-                '"' | ' ' | '\\' => write!(f, "\\{}", c)?,
-                c => write!(f, "{}", c)?,
+                '"' | ' ' | '\\' => write!(f, "\\{c}")?,
+                c => write!(f, "{c}")?,
             }
         }
         Ok(())
     }
 }
 
-/// Wrapper struct to implement Display on a list of TagValuePair.
+/// Wrapper struct to implement Display on a list of [`TagValuePair`].
 pub struct TagValuePairListFormatter<'a>(pub &'a [TagValuePair]);
 impl<'a> std::fmt::Display for TagValuePairListFormatter<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

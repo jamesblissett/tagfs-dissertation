@@ -38,33 +38,33 @@ pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write) -> Result<()>
     writeln!(out, "{COMMENT_PREFIX} You can edit this file as you please, but bear in mind to escape double")?;
     writeln!(out, "{COMMENT_PREFIX} quotes and spaces in tag values (or use double quotes around the value).")?;
     writeln!(out, "{COMMENT_PREFIX}")?;
-    writeln!(out, "{COMMENT_PREFIX} All tags default to manual tags, however any tags after the \"{}\"", AUTOTAG_LINE_SEPARATOR)?;
+    writeln!(out, "{COMMENT_PREFIX} All tags default to manual tags, however any tags after the \"{AUTOTAG_LINE_SEPARATOR}\"")?;
     writeln!(out, "{COMMENT_PREFIX} header are marked as autotags.")?;
 
     let path_map = db.dump()?;
 
-    for (path, tags) in path_map.into_iter() {
+    for (path, tags) in path_map {
         writeln!(out)?;
-        writeln!(out, "{}", LINE_SEPARATOR)?;
+        writeln!(out, "{LINE_SEPARATOR}")?;
         writeln!(out, "{path}")?;
 
         // write the manual tags.
         for tag in tags.iter().filter(|tag| !tag.auto) {
             let tag_fmt = EscapedTagFormatter(&tag.tag.name, tag.value.as_ref());
-            writeln!(out, "{}", tag_fmt)?;
+            writeln!(out, "{tag_fmt}")?;
         }
 
         // write the autotags.
         let mut autotags = tags.iter().filter(|tag| tag.auto).peekable();
         if autotags.peek().is_some() {
-            writeln!(out, "{}", AUTOTAG_LINE_SEPARATOR)?;
+            writeln!(out, "{AUTOTAG_LINE_SEPARATOR}")?;
         }
         for tag in autotags {
             let tag_fmt = EscapedTagFormatter(&tag.tag.name, tag.value.as_ref());
-            writeln!(out, "{}", tag_fmt)?;
+            writeln!(out, "{tag_fmt}")?;
         }
 
-        writeln!(out, "{}", LINE_SEPARATOR)?;
+        writeln!(out, "{LINE_SEPARATOR}")?;
     }
 
     Ok(())
@@ -96,7 +96,7 @@ pub fn from_edit_repr(input: &mut impl std::io::BufRead)
 
         // skip any blank lines or comments.
         if buf.is_empty() || buf.starts_with(COMMENT_PREFIX)
-            || buf.chars().all(|c| c.is_whitespace())
+            || buf.chars().all(char::is_whitespace)
         {
             // pass
 
@@ -116,13 +116,13 @@ pub fn from_edit_repr(input: &mut impl std::io::BufRead)
             inside_block = true;
 
         } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR && auto {
-            bail!("cannot have multiple AUTO sections in one block. Line {line_num}")
+            bail!("cannot have multiple AUTO sections in one block. Line {line_num}");
 
         } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR && !auto {
             auto = true;
 
         } else if inside_block && path.is_none() {
-            path = Some(buf.clone())
+            path = Some(buf.clone());
 
         } else if inside_block && path.is_some() {
             let tag = TagValuePair::from_str(&buf).with_context(||
@@ -131,7 +131,7 @@ pub fn from_edit_repr(input: &mut impl std::io::BufRead)
             tags.push((auto, tag));
 
         } else if !inside_block {
-            bail!("cannot have non empty lines outside of a block. Line {line_num}")
+            bail!("cannot have non empty lines outside of a block. Line {line_num}");
         }
 
         // make sure to reset the buffer before the next iteration.

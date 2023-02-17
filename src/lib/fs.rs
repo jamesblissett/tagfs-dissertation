@@ -120,12 +120,13 @@ impl TagFS {
     {
         if let Ok(children) = self.db.values(tag) {
             for (idx, child) in children.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, idx, children.iter());
+                // let display_name = sanitise_path(child, idx, children.iter());
+                let display_name = sanitise_value(child);
                 let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
                     child_inode
                 } else {
                     self.entries.get_or_create_value_directory(inode,
-                        display_name.as_ref())
+                        display_name.as_ref(), child)
                 };
 
                 let done = reply.as_mut().map_or(false, |reply|
@@ -219,7 +220,8 @@ impl TagFS {
                 }
                 EntryType::ValueDir => {
                     let tag_name = self.entries.get_parent_tag(inode).to_string();
-                    self.readdir_files(&tag_name, Some(&name.to_string()), inode, offset, reply);
+                    let value = self.entries.get_tag_value(inode).to_string();
+                    self.readdir_files(&tag_name, Some(&value), inode, offset, reply);
                 }
 
                 // query dir should always look empty to readdir.
@@ -373,6 +375,10 @@ fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
     } else {
         String::from(path_basename)
     }
+}
+
+fn sanitise_value(path: &str) -> String {
+    path.replace('/', "_")
 }
 
 mod tests {

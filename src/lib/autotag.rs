@@ -7,7 +7,10 @@ use log::{info, warn, trace};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::db::{Database, TagValuePair};
+use crate::{
+    db::{Database, TagValuePair},
+    error::TagFSErrorExt
+};
 
 static FILM_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
@@ -26,7 +29,7 @@ pub struct AutoTagger {
 
 impl AutoTagger {
 
-    /// Create a new AutoTagger, tries to find a tmdb api key if one is not
+    /// Create a new [`AutoTagger`], tries to find a tmdb api key if one is not
     /// provided.
     pub fn new(tmdb_key: Option<String>) -> Self {
         let tmdb_key = tmdb_key.or_else(||
@@ -37,19 +40,16 @@ impl AutoTagger {
 
     /// Generate and apply the autotags for a particular path.
     pub fn autotag(&self, path: &str, db: &mut Database) -> Result<()> {
-        let path_p = Path::new(path);
 
+        let path_p = Path::new(path);
         let Some(ext) = path_p.extension() else { return Ok(()) };
 
-        if ext == "flac" || ext == "m4a" || ext == "mp3" {
-            if let Ok(tags) = generate_music_tags(path) {
-                Self::apply_tags(path, tags.as_slice(), db)?;
-            }
+        let mut path_to_tag = path;
+        let tags = if ext == "flac" || ext == "m4a" || ext == "mp3" {
+            generate_music_tags(path)
 
         } else if ext == "png" || ext == "jpg" || ext == "tif" {
-            if let Ok(tags) = generate_image_tags(path) {
-                Self::apply_tags(path, tags.as_slice(), db)?;
-            }
+            generate_image_tags(path)
 
         } else if ext == "mkv" || ext == "mp4" {
             // file_stem is filename without extension.
@@ -76,16 +76,25 @@ impl AutoTagger {
 
             // Check if there is directory that matches the film name to tag
             // instead of the mkv/mp4 file.
-            let mut path = path;
             if let Some(parent_dir) = path_p.parent() {
                 if parent_dir.ends_with(film) {
-                    path = parent_dir.to_str().unwrap();
+                    // this unwrap will not panic because the path was created
+                    // from a str so it is definitely valid unicode.
+                    path_to_tag = parent_dir.to_str().unwrap();
                 }
             }
 
-            let tags = generate_film_tags(title, year, tmdb_key);
-            if let Ok(tags) = tags {
-                Self::apply_tags(path, tags.as_slice(), db)?;
+            Ok(generate_film_tags(title, year, tmdb_key))
+        } else {
+            Ok(Vec::new())
+        };
+
+        match tags {
+            Ok(tags) if !tags.is_empty() => {
+                Self::apply_tags(path_to_tag, tags.as_slice(), db)?;
+            }
+            _ => {
+                info!("could not generate any autotags for path: \"{path_to_tag}\".");
             }
         }
 
@@ -107,19 +116,11 @@ impl AutoTagger {
         for tag in tags {
             let res = db.autotag(path, &tag.tag, tag.value.as_deref());
 
-            if let Err(ref err) = res {
-                if let Some(rusqlite::Error::SqliteFailure(sql_error, _)) = err.downcast_ref::<rusqlite::Error>() {
-                    // Error code 2067 is a failure of a unique constraint.
-                    // This means we tried to add a tag that already exists.
-                    // This makes sense if we are retagging a directory tree,
-                    // so we can just ignore it.
-                    if sql_error.extended_code == 2067 {
-                        trace!("Path \"{path}\" is already tagged with tag \"{tag}\" ignoring...");
-                        continue;
-                    }
-                }
+            if res.is_sql_unique_cons_err() {
+                trace!("Path \"{path}\" is already tagged with tag \"{tag}\" ignoring...");
+            } else {
+                res?;
             }
-            res?
         }
         Ok(())
     }
@@ -159,7 +160,7 @@ fn generate_music_tags(path: &str) -> Result<Vec<TagValuePair>> {
 /// When given the title and year of a film, returns the list of automatically
 /// generated tags.
 fn generate_film_tags(title: &str, year: &str, tmdb_key: &str)
-    -> Result<Vec<TagValuePair>>
+    -> Vec<TagValuePair>
 {
     let mut tags = Vec::new();
 
@@ -184,7 +185,7 @@ fn generate_film_tags(title: &str, year: &str, tmdb_key: &str)
         warn!("error getting cast and crew tags. Continuing anyway: {e:?}.");
     }
 
-    Ok(tags)
+    tags
 }
 
 /// Puts any tags into the tags out parameter.
@@ -247,7 +248,7 @@ fn get_main_film_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
                           tags: &mut Vec<TagValuePair>)
     -> Result<()>
 {
-    let film_url = format!("{}/movie/{}", TMDB_URL, tmdb_id);
+    let film_url = format!("{TMDB_URL}/movie/{tmdb_id}");
     let film_info: serde_json::Value = agent.get(&film_url)
         .query("api_key", tmdb_key)
         .call()
@@ -289,7 +290,7 @@ fn get_cast_and_crew_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
                           tags: &mut Vec<TagValuePair>)
     -> Result<()>
 {
-    let film_credits_url = format!("{}/movie/{}/credits", TMDB_URL, tmdb_id);
+    let film_credits_url = format!("{TMDB_URL}/movie/{tmdb_id}/credits");
     let film_credits: serde_json::Value = agent.get(&film_credits_url)
         .query("api_key", tmdb_key)
         .call()
@@ -358,3 +359,4 @@ fn generate_image_tags(path: &str) -> Result<Vec<TagValuePair>> {
 
     Ok(tags)
 }
+

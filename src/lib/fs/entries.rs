@@ -32,7 +32,7 @@ enum Entry {
     },
     /// Path: /tag/value
     ValueDir {
-        name: String, tag: String, attr: FileAttr,
+        display_name: String, value: String, tag: String, attr: FileAttr,
     },
     /// Symlink to a real file.
     Link {
@@ -207,7 +207,7 @@ impl Entries {
     /// Returns the inode of a parent name pair, or creates it if it does not
     /// exist.
     pub fn get_or_create_value_directory(&mut self, parent_inode: u64,
-                                         name: &str) -> u64
+                                         name: &str, value: &str) -> u64
     {
         let children = self.names.entry(parent_inode).or_default();
         if let Some(inode) = children.get(name) {
@@ -217,7 +217,8 @@ impl Entries {
             children.insert(name.to_string(), inode);
 
             self.attrs.insert(inode, Entry::ValueDir {
-                name: name.to_string(),
+                display_name: name.to_string(),
+                value: value.to_string(),
                 tag: self.get_name(parent_inode).to_string(),
                 attr: FileAttr {
                     ino: inode,
@@ -285,8 +286,8 @@ impl Entries {
 
     /// Attempt to return the inode of the requested entry, if it cannot be
     /// found return None. Also ensure that is a link entry and it matches the
-    /// target tag_mapping_id. This way we will never reuse old entries with
-    /// invalid tag_mapping_ids.
+    /// target tag_mapping_id. This way we will never reuse old entries
+    /// with invalid tag_mapping_ids.
     pub fn try_get_link_inode(&self, parent_inode: u64, name: &str,
                          tag_mapping_id: u64) -> Option<u64>
     {
@@ -362,8 +363,27 @@ impl Entries {
 
                 Entry::QueryResultDir { name, .. }
                 | Entry::TagDir { name, .. }
-                | Entry::ValueDir { name, .. }
+                | Entry::ValueDir { display_name: name, .. }
                 | Entry::Link { name, .. } => name,
+            }
+        } else {
+            error!("tried to lookup non existent inode: {inode:#x?}.");
+            panic!("tried to lookup non existent inode: {inode:#x?}.");
+        }
+    }
+
+    /// Get the tag value of an inode.
+    ///
+    /// To call this function with an inode that does not exist is a
+    /// programming error, therefore we panic if it does not exist.
+    /// Additionally it is a programming error to call this function with an
+    /// inode type that is not a [`Entry::ValueDir`] therefore we also panic in
+    /// this case.
+    pub fn get_tag_value(&self, inode: u64) -> &str {
+        if let Some(entry) = self.attrs.get(&inode) {
+            if let Entry::ValueDir { value, .. } = entry { value } else {
+                error!("tried to lookup tag value for non ValueDir inode: {inode:#x?}.");
+                panic!("tried to lookup tag value for non ValueDir inode: {inode:#x?}.");
             }
         } else {
             error!("tried to lookup non existent inode: {inode:#x?}.");

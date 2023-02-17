@@ -6,9 +6,11 @@ pub use query::TagValuePairListFormatter;
 
 mod edit_repr;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use indexmap::map::IndexMap;
 use rusqlite::Connection;
+
+use crate::error::TagFSErrorExt;
 
 /// Analogue to the database table.
 #[derive(Debug)]
@@ -169,23 +171,19 @@ impl Database {
             "INSERT INTO TagMapping (TagID, Path, Value, Auto) VALUES (?, ?, ?, ?)"
         )?;
 
-        let err = stmt.execute(rusqlite::params![tag.id, path, value, auto]);
-        if let Err(rusqlite::Error::SqliteFailure(sql_error, _)) = err {
-            // Error code 2067 is a failure of a unique constraint.
-            // This means we tried to add a tag that already exists.
-            if sql_error.extended_code == 2067 {
-                if let Some(value) = value {
-                    err.with_context(||
-                        format!("\"{path}\" already has tag \"{tag_name}={value}\"."))?;
-                } else {
-                    err.with_context(||
-                        format!("\"{path}\" already has tag \"{tag_name}\"."))?;
-                }
+        let res = stmt.execute(rusqlite::params![tag.id, path, value, auto])
+            .map_err(|e| anyhow!(e));
+
+        if res.is_sql_unique_cons_err() {
+            if let Some(value) = value {
+                res.with_context(||
+                    format!("\"{path}\" already has tag \"{tag_name}={value}\"."))?;
             } else {
-                err?;
+                res.with_context(||
+                    format!("\"{path}\" already has tag \"{tag_name}\"."))?;
             }
         } else {
-            err?;
+            res?;
         }
 
         Ok(())
@@ -213,8 +211,8 @@ impl Database {
             DELETE FROM Tag;
         ")?;
 
-        for (path, tags) in path_map.into_iter() {
-            for (auto, tag) in tags.into_iter() {
+        for (path, tags) in path_map {
+            for (auto, tag) in tags {
                 self.tag_inner(&path, &tag.tag, tag.value.as_deref(), auto)?;
             }
         }
@@ -226,7 +224,7 @@ impl Database {
     fn dump(&self) -> Result<IndexMap<String, Vec<TagMapping>>> {
         let rows = self.tags_inner(None)?;
         let mut path_map: IndexMap<String, Vec<TagMapping>> = IndexMap::new();
-        for row in rows.into_iter() {
+        for row in rows {
             path_map.entry(row.path.clone()).or_default().push(row);
         }
         Ok(path_map)
@@ -420,6 +418,8 @@ impl Database {
         Ok(())
     }
 
+    /// Given a tag_mapping_id return the path associated with it in the
+    /// database.
     pub fn get_path_from_id(&mut self, tag_mapping_id: u64) -> Result<String> {
         let path = self.conn.query_row(
             "SELECT TagMapping.Path
@@ -431,6 +431,8 @@ impl Database {
         Ok(path)
     }
 
+    /// Returns true if all paths in the database point to a real existing path
+    /// in the filesystem.
     pub fn all_paths_valid(&self) -> Result<bool> {
         let mut stmt = self.conn.prepare_cached("
             SELECT DISTINCT TagMapping.Path FROM TagMapping
