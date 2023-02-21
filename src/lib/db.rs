@@ -402,6 +402,26 @@ impl Database {
             .map_err(|e| e.context("invalid query."))
     }
 
+    pub fn paths_with_prefix(&self, prefix: &str) -> Result<Vec<String>> {
+        let escaped_prefix = prefix
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+
+        let mut stmt = self.conn.prepare_cached("
+            SELECT DISTINCT TagMapping.Path
+            FROM TagMapping
+            WHERE TagMapping.Path LIKE (? || '%') ESCAPE '\\'
+            ORDER BY TagMapping.TagMappingID
+        ")?;
+
+        let paths = stmt.query_map(rusqlite::params![escaped_prefix],
+            |row| row.get(0))?.collect::<rusqlite::Result<_>>()?;
+
+        Ok(paths)
+    }
+
+    /// Search and replace paths in the database that match the given
+    /// old_prefix and replace it with the new_prefix.
     pub fn prefix_change(&mut self, old_prefix: &str, new_prefix: &str)
         -> Result<()>
     {

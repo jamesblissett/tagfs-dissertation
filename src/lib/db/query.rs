@@ -400,7 +400,7 @@ impl<'a, X: AsRef<str>, Y: AsRef<str>> EscapedTagFormatter<'a, X, Y> {
 
         for c in self.1.unwrap().as_ref().chars() {
             match c {
-                '"' | ' ' | '\\' => write!(f, "\\{c}")?,
+                '"' | ' ' | '\\' | '(' | ')' => write!(f, "\\{c}")?,
                 c => write!(f, "{c}")?,
             }
         }

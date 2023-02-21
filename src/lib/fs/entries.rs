@@ -9,7 +9,10 @@ use crate::fs::INodeGenerator;
 use crate::fs::MOUNT_TIME;
 
 /// Hardcoded name of the query directory.
-static QUERY_DIR_NAME: &str = "?";
+const QUERY_DIR_NAME: &str = "?";
+
+/// Hardcoded name of the query directory.
+const ALL_TAGS_DIR_NAME: &str = "tags";
 
 /// Each inode is one and only one of the types described in [`Entry`].
 #[derive(Debug)]
@@ -40,11 +43,23 @@ enum Entry {
         /// References TagMappingID in the database.
         target: u64,
         attr: FileAttr,
-    }
+    },
+    /// AllTagsDir inode - should only ever be one. Path: /tags.
+    AllTagsDir {
+        attr: FileAttr,
+    },
+    /// AllTagsIntermediate inode - Path: /tags/some/path/component/
+    AllTagsIntermediate {
+        path: String, name: String, attr: FileAttr,
+    },
+    /// AllTagsTerminal inode - Path: /tags/some/path/component/some_file.txt
+    AllTagsTerminal {
+        path: String, name: String, attr: FileAttr,
+    },
 }
 
 /// public type enum to avoid exposing the entry enum.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EntryType {
     Root,
     QueryDir,
@@ -52,6 +67,9 @@ pub enum EntryType {
     TagDir,
     Link,
     ValueDir,
+    AllTagsDir,
+    AllTagsIntermediate,
+    AllTagsTerminal,
 }
 
 #[derive(Debug)]
@@ -97,6 +115,127 @@ impl Entries {
             names: HashMap::new(),
             attrs,
         }
+    }
+
+    /// Returns the inode of the all tags directory, or creates it if it does
+    /// not exist.
+    pub fn get_or_create_all_tags_dir(&mut self) -> u64 {
+        let children = self.names.entry(FUSE_ROOT_ID).or_default();
+        if let Some(inode) = children.get(ALL_TAGS_DIR_NAME) {
+            *inode
+        } else {
+            let inode = self.inode_generator.next();
+            children.insert(ALL_TAGS_DIR_NAME.to_string(), inode);
+
+            self.attrs.insert(inode, Entry::AllTagsDir {
+                attr: FileAttr {
+                    ino: inode,
+                    size: 0,
+                    blocks: 0,
+                    atime: *MOUNT_TIME,
+                    mtime: *MOUNT_TIME,
+                    ctime: *MOUNT_TIME,
+                    crtime: *MOUNT_TIME,
+                    kind: FileType::Directory,
+                    perm: 0o755,
+                    nlink: 1,
+                    uid: 1000,
+                    gid: 1000,
+                    rdev: 0,
+                    flags: 0,
+                    blksize: 512,
+            }});
+
+            inode
+        }
+    }
+
+    /// Returns the inode of a parent name pair in the all tags hierarchy, or
+    /// creates it if it does not exist.
+    pub fn get_or_create_all_tags_intermediate(&mut self, parent_inode: u64,
+                                               name: &str, path: &str) -> u64
+    {
+        let inode = {
+            let children = self.names.entry(parent_inode).or_default();
+            children.get(name).copied()
+        };
+
+        if let Some(inode) = inode {
+            if self.get_attr(inode).kind == FileType::Directory {
+                return inode;
+            }
+        }
+
+        let children = self.names.entry(parent_inode).or_default();
+        let inode = self.inode_generator.next();
+        children.insert(name.to_string(), inode);
+
+        self.attrs.insert(inode, Entry::AllTagsIntermediate {
+            name: name.to_string(),
+            path: path.to_string(),
+            attr: FileAttr {
+                ino: inode,
+                size: 0,
+                blocks: 0,
+                atime: *MOUNT_TIME,
+                mtime: *MOUNT_TIME,
+                ctime: *MOUNT_TIME,
+                crtime: *MOUNT_TIME,
+                kind: FileType::Directory,
+                perm: 0o755,
+                nlink: 1,
+                uid: 1000,
+                gid: 1000,
+                rdev: 0,
+                flags: 0,
+                blksize: 512,
+        }});
+
+        inode
+    }
+
+    /// Returns the inode of a parent name pair in the all tags hierarchy, or
+    /// creates it if it does not exist.
+    pub fn get_or_create_all_tags_terminal(&mut self, parent_inode: u64,
+                                               name: &str, path: &str) -> u64
+    {
+        let inode = {
+            let children = self.names.entry(parent_inode).or_default();
+            children.get(name).copied()
+        };
+
+        if let Some(inode) = inode {
+            if self.get_attr(inode).kind == FileType::RegularFile {
+                return inode;
+            }
+        }
+
+        let children = self.names.entry(parent_inode).or_default();
+        let inode = self.inode_generator.next();
+        children.insert(name.to_string(), inode);
+
+        self.attrs.insert(inode, Entry::AllTagsTerminal {
+            name: name.to_string(),
+            path: path.to_string(),
+            attr: FileAttr {
+                ino: inode,
+                size: 512,
+                blocks: 1,
+                atime: *MOUNT_TIME,
+                mtime: *MOUNT_TIME,
+                ctime: *MOUNT_TIME,
+                crtime: *MOUNT_TIME,
+                kind: FileType::RegularFile,
+                perm: 0o444,
+                nlink: 1,
+                uid: 1000,
+                gid: 1000,
+                rdev: 0,
+                flags: 0,
+                blksize: 512,
+        }});
+
+        inode
     }
 
     /// Returns the inode of the query directory, or creates it if it does not
@@ -320,11 +459,8 @@ impl Entries {
     pub fn get_link_target(&self, inode: u64) -> Option<u64> {
         self.attrs.get(&inode).map(|entry| {
             match entry {
-                Entry::Root { .. } | Entry::QueryDir { .. }
-                | Entry::QueryResultDir { .. } | Entry::TagDir { .. }
-                | Entry::ValueDir { .. } =>
-                    panic!("programming error - directory is not a link and has no target."),
                 Entry::Link { target, .. } => *target,
+                _ => panic!("programming error - directory is not a link and has no target."),
             }
         })
     }
@@ -352,6 +488,9 @@ impl Entries {
                 | Entry::QueryResultDir { attr, .. }
                 | Entry::TagDir { attr, .. }
                 | Entry::ValueDir { attr, .. }
+                | Entry::AllTagsDir { attr, .. }
+                | Entry::AllTagsIntermediate { attr, .. }
+                | Entry::AllTagsTerminal { attr, .. }
                 | Entry::Link { attr, .. } => attr,
             }
         } else {
@@ -369,16 +508,40 @@ impl Entries {
             match entry {
                 Entry::Root { .. } => "/",
                 Entry::QueryDir { .. } => QUERY_DIR_NAME,
+                Entry::AllTagsDir { .. } => ALL_TAGS_DIR_NAME,
 
                 Entry::QueryResultDir { display_name: name, .. }
                 | Entry::TagDir { name, .. }
                 | Entry::ValueDir { display_name: name, .. }
+                | Entry::AllTagsIntermediate { name, .. }
+                | Entry::AllTagsTerminal { name, .. }
                 | Entry::Link { name, .. } => name,
             }
         } else {
             error!("tried to lookup non existent inode: {inode:#x?}.");
             panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
+    }
+
+    /// Get the path of an inode in the [`Entry::AllTagsDir`] hierarchy.
+    ///
+    /// To call this function with an inode that does not exist is a
+    /// programming error, therefore we panic if it does not exist.
+    /// Additionally it is a programming error to call this function with an
+    /// inode type that is not an [`Entry::AllTagsDir`] or an
+    /// [`Entry::AllTagsIntermediate`], therefore we also panic in this case.
+    pub fn get_path(&self, inode: u64) -> &str {
+        if let Some(entry) = self.attrs.get(&inode) {
+            if let Entry::AllTagsDir { .. } = entry {
+                return "/";
+            } else if let Entry::AllTagsIntermediate { path, .. } = entry {
+                return &path;
+            } else if let Entry::AllTagsTerminal { path, .. } = entry {
+                return &path;
+            }
+        }
+        error!("tried to lookup non existent inode: {inode:#x?}.");
+        panic!("tried to lookup non existent inode: {inode:#x?}.");
     }
 
     /// Get the tag value of an inode.
@@ -411,6 +574,9 @@ impl Entries {
                 Entry::TagDir { .. } => EntryType::TagDir,
                 Entry::ValueDir { .. } => EntryType::ValueDir,
                 Entry::Link { .. } => EntryType::Link,
+                Entry::AllTagsDir { .. } => EntryType::AllTagsDir,
+                Entry::AllTagsIntermediate { .. } => EntryType::AllTagsIntermediate,
+                Entry::AllTagsTerminal { .. } => EntryType::AllTagsTerminal,
             }
         } else {
             error!("tried to lookup non existent inode: {inode:#x?}.");
