@@ -470,7 +470,7 @@ impl Database {
 
         let all_valid = stmt.query_map([], |row| row.get::<_, String>(0))?
             .all(|path| path.map_or(false,
-                |path| std::path::Path::new(&path).exists()));
+                |path| camino::Utf8Path::new(&path).exists()));
 
         Ok(all_valid)
     }

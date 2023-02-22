@@ -1,8 +1,7 @@
 //! Module that generates automatic tags from a path.
 
-use std::path::Path;
-
 use anyhow::{anyhow, bail, Result, Context};
+use camino::Utf8Path;
 use chrono::NaiveDateTime;
 use log::{info, warn, trace};
 use once_cell::sync::Lazy;
@@ -42,7 +41,7 @@ impl AutoTagger {
     /// Generate and apply the autotags for a particular path.
     pub fn autotag(&self, path: &str, db: &mut Database) -> Result<()> {
 
-        let path_p = Path::new(path);
+        let path_p = Utf8Path::new(path);
         let Some(ext) = path_p.extension() else { return Ok(()) };
 
         let mut path_to_tag = path;
@@ -55,10 +54,6 @@ impl AutoTagger {
         } else if ext == "mkv" || ext == "mp4" {
             // file_stem is filename without extension.
             let Some(film) = path_p.file_stem() else { return Ok(()) };
-
-            // this unwrap will not panic because the path was created
-            // from a str so it is definitely valid unicode.
-            let film = film.to_str().unwrap();
 
             let Some(matches) = FILM_REGEX.captures(film) else {
                 return Ok(())
@@ -82,9 +77,7 @@ impl AutoTagger {
             // instead of the mkv/mp4 file.
             if let Some(parent_dir) = path_p.parent() {
                 if parent_dir.ends_with(film) {
-                    // this unwrap will not panic because the path was created
-                    // from a str so it is definitely valid unicode.
-                    path_to_tag = parent_dir.to_str().unwrap();
+                    path_to_tag = parent_dir.as_str();
                 }
             }
 

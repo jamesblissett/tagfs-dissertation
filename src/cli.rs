@@ -1,8 +1,7 @@
 //! Module that handles parsing the command line using clap.
 
-use std::path::Path;
-
 use anyhow::{Result, Context};
+use camino::Utf8PathBuf;
 
 use libtagfs::db::TagValuePair;
 
@@ -23,7 +22,7 @@ pub struct QueryCommand {
 pub struct TagCommand {
     /// Path to apply tag to.
     #[arg(required = true, value_name = "path")]
-    pub path: String,
+    pub path: Utf8PathBuf,
 
     /// Tag and optional value to apply to path tag(=value)?
     #[arg(required = true, value_name = "tags")]
@@ -35,7 +34,7 @@ pub struct TagCommand {
 pub struct MountCommand {
     /// Directory to mount the file system at.
     #[arg(required = true, value_name = "mount-point")]
-    pub mount_point: String,
+    pub mount_point: Utf8PathBuf,
 }
 
 /// Handles the tags command args.
@@ -43,7 +42,7 @@ pub struct MountCommand {
 pub struct TagsCommand {
     /// Path to show associated tags.
     #[arg(value_name = "path")]
-    pub path: Option<String>,
+    pub path: Option<Utf8PathBuf>,
 }
 
 /// Handles the untag command args.
@@ -51,7 +50,7 @@ pub struct TagsCommand {
 pub struct UntagCommand {
     /// Path to remove tag from.
     #[arg(required = true, value_name = "path")]
-    pub path: String,
+    pub path: Utf8PathBuf,
 
     /// Optional tag and optional value to remove from path tag(=value)?
     #[arg(value_name = "tag")]
@@ -64,7 +63,7 @@ pub struct UntagCommand {
 pub struct AutotagCommand {
     /// Path to directory or file to autotag.
     #[arg(required = true, value_name = "path")]
-    pub path: String,
+    pub path: Utf8PathBuf,
 
     /// TMDB API key.
     ///
@@ -86,7 +85,7 @@ pub struct PrefixCommand {
     pub new_prefix: String,
 }
 
-/// Handles the prefix command args.
+/// Handles the edit command args.
 #[derive(clap::Args, Clone, Debug)]
 pub struct EditCommand {
 }
@@ -150,7 +149,7 @@ pub struct Args {
 
     /// Path to database to use or create.
     #[arg(long, global = true, value_name = "database")]
-    pub database: Option<String>,
+    pub database: Option<Utf8PathBuf>,
 }
 
 impl Args {
@@ -161,7 +160,7 @@ impl Args {
     /// Find the path to the database. \
     /// It is either specified in the command line arguments or a default is
     /// computed.
-    pub fn db_path(&self) -> Result<String> {
+    pub fn db_path(&self) -> Result<Utf8PathBuf> {
 
         if let Some(path) = &self.database {
             return Ok(path.clone());
@@ -172,22 +171,22 @@ impl Args {
             .map_or_else(
                 |_e| {
                     let home = std::env::var("HOME").unwrap();
-                    let mut path = Path::new(&home).to_path_buf();
-                    path.push(Path::new(".local/share"));
+                    let mut path = Utf8PathBuf::from(&home).to_path_buf();
+                    path.push(".local/share");
                     path
                 },
-                |xdg_data_path| Path::new(&xdg_data_path).to_path_buf());
+                |xdg_data_path| Utf8PathBuf::from(&xdg_data_path));
 
         // create our own directory within XDG_DATA_HOME.
         db_dir.push("tagfs");
         std::fs::create_dir_all(&db_dir).with_context(||
             format!("could not create directory \"{}\" for the database.",
-                    db_dir.display()))?;
+                    db_dir))?;
 
         // add our database file to the path.
         db_dir.push("default.db");
 
         let db = db_dir;
-        Ok(db.as_os_str().to_string_lossy().to_string())
+        Ok(db)
     }
 }

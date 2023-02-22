@@ -36,10 +36,15 @@ fn init_logging() {
         .init();
 }
 
-// TODO: reject relative paths.
 /// Tag subcommand entry point.
 fn tag_main(command: TagCommand, mut db: Database) -> Result<()> {
-    let path = command.path.trim_end_matches('/');
+    let path = command.path;
+
+    if path.is_relative() {
+        bail!("cannot tag a relative path.");
+    }
+
+    let path = path.as_str().trim_end_matches('/');
 
     for tag in &command.tags {
         db.tag(path, &tag.tag, tag.value.as_deref())?;
@@ -49,7 +54,7 @@ fn tag_main(command: TagCommand, mut db: Database) -> Result<()> {
 
 /// Untag subcommand entry point.
 fn untag_main(command: UntagCommand, mut db: Database) -> Result<()> {
-    let path = command.path.trim_end_matches('/');
+    let path = command.path.as_str().trim_end_matches('/');
 
     match command.tag {
         Some(TagValuePair { tag, value }) =>
@@ -113,7 +118,7 @@ fn mount_main(command: MountCommand, db: Database) -> Result<()> {
         warn!("The database contains invalid paths. Mounting anyway...");
     }
 
-    libtagfs::fs::mount(&command.mount_point, db)
+    libtagfs::fs::mount(command.mount_point.as_str(), db)
         .context("an unexpected fuse error occured. \
                   Please check the log for more details.")?;
 
@@ -243,16 +248,17 @@ fn main() {
     let args = Args::parse();
 
     let db_path = unwrap_or_exit(args.db_path());
-    let db = unwrap_or_exit(libtagfs::db::get_or_create_db(Some(&db_path))
-        .context("could not find or create a database. \
-                  Please check the log for more details."));
+    let db = unwrap_or_exit(
+        libtagfs::db::get_or_create_db(Some(db_path.as_str()))
+            .context("could not find or create a database. \
+                    Please check the log for more details."));
 
     let err = match args.command {
         Command::Tag(tag_command) => tag_main(tag_command, db),
         Command::Untag(untag_command) => untag_main(untag_command, db),
         Command::Mount(mount_command) => mount_main(mount_command, db),
         Command::Tags(TagsCommand { path: Some(path), .. } ) =>
-            tags_specific_path_main(&path, db),
+            tags_specific_path_main(path.as_str(), db),
         Command::Tags(TagsCommand { path: None, .. } ) =>
             tags_all_main(db),
         Command::Query(query_command) => query_main(query_command, db),

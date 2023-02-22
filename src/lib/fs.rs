@@ -534,14 +534,14 @@ fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
                                 siblings: impl Iterator<Item=T>) -> String
 {
 
-    fn basename(path: &str) -> std::borrow::Cow<str> {
-        let path = std::path::Path::new(path);
+    fn basename(path: &str) -> &str {
+        let path = camino::Utf8Path::new(path);
         let Some(file_name) = path.file_name() else {
             panic!("invalid path \"{}\" without final component.",
-                   path.display());
+                   path);
         };
 
-        file_name.to_string_lossy()
+        file_name
     }
 
     let path_basename = basename(path);
