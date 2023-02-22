@@ -3,12 +3,13 @@
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Result, Context};
+use chrono::NaiveDateTime;
 use log::{info, warn, trace};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::{
-    db::{Database, TagValuePair},
+    db::{Database, SimpleTagFormatter, TagValuePair, ListFormatter},
     error::TagFSErrorExt
 };
 
@@ -59,7 +60,9 @@ impl AutoTagger {
             // from a str so it is definitely valid unicode.
             let film = film.to_str().unwrap();
 
-            let Some(matches) = FILM_REGEX.captures(film) else { return Ok(()) };
+            let Some(matches) = FILM_REGEX.captures(film) else {
+                return Ok(())
+            };
 
             // it is okay to use the panicking versions of getting
             // a named group because the groups are not optional.
@@ -70,7 +73,8 @@ impl AutoTagger {
             // before we need to use it. This is to make sure that
             // we are not unnecessarily requiring it.
             let tmdb_key = self.tmdb_key.as_deref().ok_or_else(|| anyhow!(
-                "missing TMDB api key. Please provide it with the {} environment variable or use the --tmdb-key flag.",
+                "missing TMDB api key. Please provide it with the {} \
+                 environment variable or use the --tmdb-key flag.",
                 TMDB_KEY_ENV_VAR_NAME
             ))?;
 
@@ -94,7 +98,8 @@ impl AutoTagger {
                 Self::apply_tags(path_to_tag, tags.as_slice(), db)?;
             }
             _ => {
-                info!("could not generate any autotags for path: \"{path_to_tag}\".");
+                info!("could not generate any autotags for path: \
+                       \"{path_to_tag}\".");
             }
         }
 
@@ -107,17 +112,17 @@ impl AutoTagger {
         -> Result<()>
     {
         if !tags.is_empty() {
-            info!(
-                "Autotagging \"{path}\" with tags: {}",
-                crate::db::TagValuePairListFormatter(tags)
-            );
+            info!("Autotagging \"{path}\" with tags: {}",
+                  ListFormatter::from(
+                      tags.iter().map(SimpleTagFormatter::from)));
         }
 
         for tag in tags {
             let res = db.autotag(path, &tag.tag, tag.value.as_deref());
 
             if res.is_sql_unique_cons_err() {
-                trace!("Path \"{path}\" is already tagged with tag \"{tag}\" ignoring...");
+                trace!("Path \"{path}\" is already tagged with tag \"{}\" \
+                        ignoring...", SimpleTagFormatter::from(tag));
             } else {
                 res?;
             }
@@ -209,7 +214,8 @@ fn get_remote_film_tags(title: &str, year: &str, tmdb_key: &str,
         .call()
         .context("failed to call the TMDB api. Is the network okay?")?
         .into_json()
-        .context("failed to convert TMDB response into JSON. Is the network okay?")?;
+        .context("failed to convert TMDB response into JSON. \
+                  Is the network okay?")?;
 
     let results = matches.get("results")
         .and_then(|results| results.as_array());
@@ -217,8 +223,10 @@ fn get_remote_film_tags(title: &str, year: &str, tmdb_key: &str,
     let mut film = None;
     if let Some(results) = results {
         for m in results.iter() {
-            let matches_title = m.get("title").map(|t| t == title) == Some(true);
-            let matches_orig_title = m.get("original_title").map(|t| t == title) == Some(true);
+            let matches_title = m.get("title")
+                .map_or(false, |t| t == title);
+            let matches_orig_title = m.get("original_title")
+                .map_or(false, |t| t == title);
 
             if matches_title || matches_orig_title {
                 film = Some(m);
@@ -228,13 +236,17 @@ fn get_remote_film_tags(title: &str, year: &str, tmdb_key: &str,
     }
 
     let Some(film) = film else {
-        warn!("could not find an exact match for film \"{title} ({year})\", skipping autotagging...");
-        bail!("could not find an exact match for film \"{title} ({year})\", skipping autotagging...");
+        warn!("could not find an exact match for film \"{title} ({year})\", \
+               skipping autotagging...");
+        bail!("could not find an exact match for film \"{title} ({year})\", \
+               skipping autotagging...");
     };
 
     let Some(tmdb_id) = film.get("id").and_then(|id| id.as_u64()) else {
-        warn!("could not get TMDB id for film \"{title} ({year})\", skipping autotagging...");
-        bail!("could not get TMDB id for film \"{title} ({year})\", skipping autotagging...");
+        warn!("could not get TMDB id for film \"{title} ({year})\", \
+               skipping autotagging...");
+        bail!("could not get TMDB id for film \"{title} ({year})\", \
+               skipping autotagging...");
     };
 
     trace!("Matched \"{title} ({year})\" to https://tmdb.org/movie/{tmdb_id}");
@@ -261,7 +273,8 @@ fn get_main_film_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
         .call()
         .context("failed to call the TMDB api. Is the network okay?")?
         .into_json()
-        .context("failed to convert TMDB response into JSON. Is the network okay?")?;
+        .context("failed to convert TMDB response into JSON. \
+                  Is the network okay?")?;
 
     // dbg!(&film_info);
 
@@ -303,7 +316,8 @@ fn get_cast_and_crew_tags(tmdb_id: u64, agent: &ureq::Agent, tmdb_key: &str,
         .call()
         .context("failed to call the TMDB api. Is the network okay?")?
         .into_json()
-        .context("failed to convert TMDB response into JSON. Is the network okay?")?;
+        .context("failed to convert TMDB response into JSON. \
+                  Is the network okay?")?;
 
     let mut directors = film_credits.get("crew")
         .and_then(|crew| crew.as_array())
@@ -351,10 +365,11 @@ fn generate_image_tags(path: &str) -> Result<Vec<TagValuePair>> {
     let exif = exif::Reader::new()
         .read_from_container(&mut file_reader)?;
 
-    let taken_at = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
+    use exif::{Tag, In};
+    let taken_at = exif.get_field(Tag::DateTimeOriginal, In::PRIMARY)
         .and_then(|field| {
             let value = field.display_value().to_string();
-            chrono::NaiveDateTime::parse_from_str(&value, "%Y-%m-%d %H:%M:%S").ok()
+            NaiveDateTime::parse_from_str(&value, "%Y-%m-%d %H:%M:%S").ok()
         });
 
     if let Some(taken_at) = taken_at {

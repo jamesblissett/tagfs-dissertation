@@ -59,7 +59,7 @@ enum Entry {
 }
 
 /// public type enum to avoid exposing the entry enum.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum EntryType {
     Root,
     QueryDir,
@@ -437,7 +437,8 @@ impl Entries {
         inode
             .and_then(|inode| self.attrs.get(&inode))
             .and_then(|entry| match entry {
-                Entry::Link { target, .. } if *target == tag_mapping_id => inode,
+                Entry::Link { target, .. } if *target == tag_mapping_id
+                    => inode,
                 _ => None,
             })
     }
@@ -446,13 +447,14 @@ impl Entries {
     ///
     /// This is only valid when called with an [`Entry::ValueDir`] inode.
     pub fn get_parent_tag(&self, inode: u64) -> &str {
-        if let Some(entry) = self.attrs.get(&inode) {
-            if let Entry::ValueDir { tag, .. } = entry {
-                return tag;
-            }
+        if let Some(Entry::ValueDir { tag, .. }) = self.attrs.get(&inode) {
+            tag
+        } else {
+            error!("tried to lookup parent tag of non ValueDir entry: \
+                    {inode:#x?}.");
+            panic!("tried to lookup parent tag of non ValueDir entry: \
+                    {inode:#x?}.");
         }
-        error!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
-        panic!("tried to lookup parent tag of non ValueDir entry: {inode:#x?}.");
     }
 
     /// Get the target of a link by inode.
@@ -460,26 +462,29 @@ impl Entries {
         self.attrs.get(&inode).map(|entry| {
             match entry {
                 Entry::Link { target, .. } => *target,
-                _ => panic!("programming error - directory is not a link and has no target."),
+                _ => panic!("programming error - directory is not a link \
+                             and has no target."),
             }
         })
     }
 
     /// Get the query related to a [`Entry::QueryResultDir`].
     pub fn get_query(&self, inode: u64) -> &str {
-        if let Some(entry) = self.attrs.get(&inode) {
-            if let Entry::QueryResultDir { query, .. } = entry {
-                return query;
-            }
+        let attr = self.attrs.get(&inode);
+        if let Some(Entry::QueryResultDir { query, .. }) = attr {
+            query
+        } else {
+            error!("tried to lookup query of non QueryResultDir entry: \
+                    {inode:#x?}.");
+            panic!("tried to lookup query of non QueryResultDir entry: \
+                    {inode:#x?}.");
         }
-        error!("tried to lookup query of non QueryResultDir entry: {inode:#x?}.");
-        panic!("tried to lookup query of non QueryResultDir entry: {inode:#x?}.");
     }
 
     /// Get the attributes for an inode.
     ///
-    /// To call this function with an inode that does not exist is a programming
-    /// error, therefore we panic if it does not exist.
+    /// To call this function with an inode that does not exist is a
+    /// programming error, therefore we panic if it does not exist.
     pub fn get_attr(&self, inode: u64) -> &FileAttr {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
@@ -501,8 +506,8 @@ impl Entries {
 
     /// Get the name of an inode.
     ///
-    /// To call this function with an inode that does not exist is a programming
-    /// error, therefore we panic if it does not exist.
+    /// To call this function with an inode that does not exist is a
+    /// programming error, therefore we panic if it does not exist.
     pub fn get_name(&self, inode: u64) -> &str {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
@@ -535,9 +540,9 @@ impl Entries {
             if let Entry::AllTagsDir { .. } = entry {
                 return "/";
             } else if let Entry::AllTagsIntermediate { path, .. } = entry {
-                return &path;
+                return path;
             } else if let Entry::AllTagsTerminal { path, .. } = entry {
-                return &path;
+                return path;
             }
         }
         error!("tried to lookup non existent inode: {inode:#x?}.");
@@ -552,19 +557,18 @@ impl Entries {
     /// inode type that is not a [`Entry::ValueDir`] therefore we also panic in
     /// this case.
     pub fn get_tag_value(&self, inode: u64) -> &str {
-        if let Some(entry) = self.attrs.get(&inode) {
-            if let Entry::ValueDir { value, .. } = entry {
-                return value;
-            }
+        if let Some(Entry::ValueDir { value, .. }) = self.attrs.get(&inode) {
+            value
+        } else {
+            error!("tried to lookup non existent inode: {inode:#x?}.");
+            panic!("tried to lookup non existent inode: {inode:#x?}.");
         }
-        error!("tried to lookup non existent inode: {inode:#x?}.");
-        panic!("tried to lookup non existent inode: {inode:#x?}.");
     }
 
     /// Get the type of an inode.
     ///
-    /// To call this function with an inode that does not exist is a programming
-    /// error, therefore we panic if it does not exist.
+    /// To call this function with an inode that does not exist is a
+    /// programming error, therefore we panic if it does not exist.
     pub fn get_type(&self, inode: u64) -> EntryType {
         if let Some(entry) = self.attrs.get(&inode) {
             match entry {
@@ -575,7 +579,8 @@ impl Entries {
                 Entry::ValueDir { .. } => EntryType::ValueDir,
                 Entry::Link { .. } => EntryType::Link,
                 Entry::AllTagsDir { .. } => EntryType::AllTagsDir,
-                Entry::AllTagsIntermediate { .. } => EntryType::AllTagsIntermediate,
+                Entry::AllTagsIntermediate { .. }
+                    => EntryType::AllTagsIntermediate,
                 Entry::AllTagsTerminal { .. } => EntryType::AllTagsTerminal,
             }
         } else {

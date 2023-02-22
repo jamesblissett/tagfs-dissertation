@@ -100,7 +100,7 @@ fn tags_specific_path_main(path: &str, db: Database) -> Result<()> {
     }
 
     for tag in &tags {
-        println!("{}", libtagfs::db::SimpleTagFormatter(tag));
+        println!("{}", libtagfs::db::SimpleTagFormatter::from(tag));
     }
 
     Ok(())
@@ -114,7 +114,8 @@ fn mount_main(command: MountCommand, db: Database) -> Result<()> {
     }
 
     libtagfs::fs::mount(&command.mount_point, db)
-        .context("an unexpected fuse error occured. Please check the log for more details.")?;
+        .context("an unexpected fuse error occured. \
+                  Please check the log for more details.")?;
 
     Ok(())
 }
@@ -134,7 +135,8 @@ fn edit_main(_command: EditCommand, mut db: Database) -> Result<()> {
         .context("could not create temporary file to edit.")?;
 
     std::fs::write(&temp_file, &initial_dump).with_context(||
-        format!("could not write to temporary file \"{}\".", temp_file.display()))?;
+        format!("could not write to temporary file \"{}\".",
+                temp_file.display()))?;
 
     // allow user to edit text here.
     //   make temp file.
@@ -148,14 +150,16 @@ fn edit_main(_command: EditCommand, mut db: Database) -> Result<()> {
     let exit_status = std::process::Command::new(get_editor())
         .arg(temp_file.as_os_str())
         .status()
-        .context("failed to start an editor. Please set $EDITOR or $VISUAL to your preferred editor.")?;
+        .context("failed to start an editor. \
+                  Please set $EDITOR or $VISUAL to your preferred editor.")?;
 
     if !exit_status.success() {
         bail!("editor did not exit cleanly, aborting...");
     }
 
     let mut file = std::fs::File::open(&temp_file).with_context(||
-        format!("could not open temporary file \"{}\" for reading.", temp_file.display()))?;
+        format!("could not open temporary file \"{}\" for reading.",
+                temp_file.display()))?;
 
     // preallocating the edited string to be at least the same size as the
     // initial string - might save a few allocations.
@@ -198,7 +202,8 @@ fn autotag_main(command: AutotagCommand, mut db: Database) -> Result<()> {
         if let Some(path) = path.to_str() {
             autotagger.autotag(path, &mut db)?;
         } else {
-            warn!("ignoring path \"{}\" due to invalid UTF-8.", path.display());
+            warn!("ignoring path \"{}\" due to invalid UTF-8.",
+                  path.display());
         }
     }
 
@@ -213,7 +218,8 @@ fn display_and_log_error<T>(res: Result<T>) {
     }
 }
 
-/// Helper function to display and log error then exit, or alternatively unwrap.
+/// Helper function to display and log error then exit, or alternatively
+/// unwrap.
 fn unwrap_or_exit<T>(res: Result<T>) -> T {
     if let Ok(db_path) = res {
         db_path
@@ -238,7 +244,8 @@ fn main() {
 
     let db_path = unwrap_or_exit(args.db_path());
     let db = unwrap_or_exit(libtagfs::db::get_or_create_db(Some(&db_path))
-        .context("could not find or create a database. Please check the log for more details."));
+        .context("could not find or create a database. \
+                  Please check the log for more details."));
 
     let err = match args.command {
         Command::Tag(tag_command) => tag_main(tag_command, db),

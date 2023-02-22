@@ -57,8 +57,8 @@ impl TagFS {
     }
 
     /// Helper function to reply with the root directory entries.
-    fn readdir_root(&mut self, offset: i64, mut reply: Option<ReplyDirectory>) {
-
+    fn readdir_root(&mut self, offset: i64, mut reply: Option<ReplyDirectory>)
+    {
         let static_dirs = &[
             self.entries.get_or_create_query_directory(),
             self.entries.get_or_create_all_tags_dir(),
@@ -70,7 +70,8 @@ impl TagFS {
 
             for (idx, dir_inode) in offset_dirs {
                 let done = reply.as_mut().map_or(false, |reply|
-                    reply.add(*dir_inode, (idx + 1) as i64, FileType::Directory,
+                    reply.add(*dir_inode, (idx + 1) as i64,
+                        FileType::Directory,
                         self.entries.get_name(*dir_inode)));
 
                 if done {
@@ -80,18 +81,20 @@ impl TagFS {
             }
         }
 
-        let tags = self.db.all_tags().unwrap();
-        for (idx, tag) in tags.iter().enumerate().skip(offset as usize) {
-            let child_inode = self.entries.get_or_create_tag_directory(
-                FUSE_ROOT_ID, tag
-            );
+        if let Ok(tags) = self.db.all_tags() {
+            for (idx, tag) in tags.iter().enumerate().skip(offset as usize) {
+                let child_inode = self.entries.get_or_create_tag_directory(
+                    FUSE_ROOT_ID, tag
+                );
 
-            // we add two to the index to account for the query directory.
-            let done = reply.as_mut().map_or(false, |reply|
-                reply.add(child_inode, (idx + 1 + static_dirs.len()) as i64,
-                    FileType::Directory, tag));
+                // we add two to the index to account for the query directory.
+                let done = reply.as_mut().map_or(false, |reply|
+                    reply.add(child_inode,
+                        (idx + 1 + static_dirs.len()) as i64,
+                        FileType::Directory, tag));
 
-            if done { break; }
+                if done { break; }
+            }
         }
         if let Some(reply) = reply { reply.ok() }
     }
@@ -102,14 +105,20 @@ impl TagFS {
                      offset: i64, mut reply: Option<ReplyDirectory>)
     {
         if let Ok(children) = self.db.paths_with_tag(tag, value) {
-            for (idx, (child, child_id)) in children.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, idx, children.iter().map(|(child, _)| child));
-                let child_inode = if let Some(child_inode) = self.entries.try_get_link_inode(inode, display_name.as_ref(), *child_id) {
-                    child_inode
-                } else {
-                    self.entries.create_link(inode, display_name.as_ref(),
-                        *child_id, child.len() as u64)
-                };
+
+            let children_offset = children.iter()
+                .enumerate().skip(offset as usize);
+            for (idx, (child, child_id)) in children_offset {
+
+                let siblings = children.iter().map(|(child, _)| child);
+                let display_name = sanitise_path(child, idx, siblings);
+
+                let child_inode = self.entries.try_get_link_inode(inode,
+                    display_name.as_ref(), *child_id)
+                        .unwrap_or_else(||
+                            self.entries.create_link(inode,
+                                display_name.as_ref(), *child_id,
+                                child.len() as u64));
 
                 let done = reply.as_mut().map_or(false, |reply|
                     reply.add(child_inode, (idx + 1) as i64,
@@ -126,15 +135,18 @@ impl TagFS {
                       mut reply: Option<ReplyDirectory>)
     {
         if let Ok(children) = self.db.values(tag) {
-            for (idx, child) in children.iter().enumerate().skip(offset as usize) {
-                // let display_name = sanitise_path(child, idx, children.iter());
+
+            let children_offset = children.iter()
+                .enumerate().skip(offset as usize);
+            for (idx, child) in children_offset {
+
                 let display_name = sanitise_value(child);
-                let child_inode = if let Some(child_inode) = self.entries.try_get_inode(inode, display_name.as_ref()) {
-                    child_inode
-                } else {
-                    self.entries.get_or_create_value_directory(inode,
-                        display_name.as_ref(), child)
-                };
+
+                let child_inode = self.entries.try_get_inode(inode,
+                    display_name.as_ref())
+                        .unwrap_or_else(||
+                            self.entries.get_or_create_value_directory(inode,
+                                display_name.as_ref(), child));
 
                 let done = reply.as_mut().map_or(false, |reply|
                     reply.add(child_inode, (idx + 1) as i64,
@@ -147,7 +159,9 @@ impl TagFS {
     }
 
     /// Helper function to look up the root inode and create its children if
-    /// necessary.
+    /// necessary. The reason we return the inode of the child is so that we
+    /// can pre-emptively call readdir with that inode to 'preload' the
+    /// entries.
     fn lookup_root_child(&mut self, parent: u64, name: &str, reply: ReplyEntry)
         -> Option<u64>
     {
@@ -160,6 +174,7 @@ impl TagFS {
             let inode = self.entries.get_or_create_tag_directory(parent, name);
             reply.entry(&TTL, self.entries.get_attr(inode), 0);
             Some(inode)
+
         } else {
             let query_dir_inode = self.entries.get_or_create_query_directory();
             let all_tags_dir_inode = self.entries.get_or_create_all_tags_dir();
@@ -169,7 +184,8 @@ impl TagFS {
                 Some(query_dir_inode)
 
             } else if name == self.entries.get_name(all_tags_dir_inode) {
-                reply.entry(&TTL, self.entries.get_attr(all_tags_dir_inode), 0);
+                reply.entry(&TTL,
+                    self.entries.get_attr(all_tags_dir_inode), 0);
                 Some(all_tags_dir_inode)
 
             } else {
@@ -187,15 +203,20 @@ impl TagFS {
         // the else case _should_ never happen because we have
         // already rejected any invalid queries.
         if let Ok(paths) = self.db.query(query, false) {
-            for (idx, (child, child_id)) in paths.iter().enumerate().skip(offset as usize) {
-                let display_name = sanitise_path(child, idx, paths.iter().map(|(child, _)| child));
-                let child_inode = if let Some(child_inode) = self.entries.try_get_link_inode(inode, display_name.as_ref(), *child_id) {
-                    child_inode
-                } else {
-                    self.entries.create_link(
-                        inode, display_name.as_ref(), *child_id, child.len() as u64
-                    )
-                };
+
+            let paths_offset = paths.iter().enumerate().skip(offset as usize);
+            for (idx, (child, child_id)) in paths_offset {
+
+                let siblings = paths.iter().map(|(child, _)| child);
+                let display_name = sanitise_path(child, idx, siblings);
+
+                let child_inode = self.entries.try_get_link_inode(inode,
+                    display_name.as_ref(), *child_id)
+                        .unwrap_or_else(||
+                            self.entries.create_link(
+                                inode, display_name.as_ref(),
+                                *child_id, child.len() as u64
+                            ));
 
                 let done = reply.as_mut().map_or(false, |reply|
                     reply.add(child_inode, (idx + 1) as i64,
@@ -212,12 +233,21 @@ impl TagFS {
                          mut reply: Option<ReplyDirectory>)
     {
         // TODO: put these into the database.
-        let stored_queries = vec![("medium-watch", "runtime > 100 and runtime < 130 and not watched")];
+        let stored_queries = vec![
+            ("medium-watch",
+                "runtime > 100 and runtime < 130 and not watched"),
+            ("unwatched",
+                "not watched and type=film"),
+        ];
         let stored_queries = stored_queries.iter()
             .map(|(name, query)| (format!("{name} @ [{query}]"), query));
 
-        for (idx, (name, query)) in stored_queries.enumerate().skip(offset as usize) {
-            let child_inode = self.entries.get_or_create_query_result_dir(query, &name);
+        let stored_queries_offset = stored_queries
+            .enumerate().skip(offset as usize);
+
+        for (idx, (name, query)) in stored_queries_offset {
+            let child_inode = self.entries.get_or_create_query_result_dir(
+                query, &name);
 
             let done = reply.as_mut().map_or(false, |reply|
                 reply.add(child_inode, (idx + 1) as i64,
@@ -241,29 +271,43 @@ impl TagFS {
         if let Ok(children) = self.db.paths_with_prefix(path) {
             for child in &children {
                 let Some(child_stripped) = child.strip_prefix(path) else {
-                    error!("programming error - path: \"{child}\" must have prefix: \"{path}\".");
-                    panic!("programming error - path: \"{child}\" must have prefix: \"{path}\".");
+                    error!("programming error - path: \"{child}\" must have \
+                            prefix: \"{path}\".");
+                    panic!("programming error - path: \"{child}\" must have \
+                            prefix: \"{path}\".");
                 };
 
                 if let Some(split_point) = child_stripped.find('/') {
                     let name = &child_stripped[0..split_point];
-                    uniq_names.insert(Cow::from(name),
-                        (&child[0 .. path.len() + split_point + 1], FileType::Directory));
+                    uniq_names.insert(
+                        Cow::from(name),
+                        (&child[0 .. path.len() + split_point + 1],
+                            FileType::Directory))
+                    ;
                 } else {
-                    uniq_names.insert(Cow::from(format!("{child_stripped}.tags")),
-                        (child, FileType::RegularFile));
+                    uniq_names.insert(
+                        Cow::from(format!("{child_stripped}.tags")),
+                        (child, FileType::RegularFile)
+                    );
                 }
             }
 
-            for (idx, (name, (path, kind))) in uniq_names.iter().enumerate().skip(offset as usize) {
+            let uniq_names_offset = uniq_names.iter()
+                .enumerate()
+                .skip(offset as usize);
+
+            for (idx, (name, (path, kind))) in uniq_names_offset {
                 let child_inode = if *kind == FileType::Directory {
-                    self.entries.get_or_create_all_tags_intermediate(inode, name, path)
+                    self.entries.get_or_create_all_tags_intermediate(inode,
+                        name, path)
                 } else {
-                    self.entries.get_or_create_all_tags_terminal(inode, name, path)
+                    self.entries.get_or_create_all_tags_terminal(inode,
+                        name, path)
                 };
 
                 let done = reply.as_mut().map_or(false, |reply|
-                    reply.add(child_inode, (idx + 1) as i64, *kind, name.as_ref()));
+                    reply.add(child_inode, (idx + 1) as i64,
+                        *kind, name.as_ref()));
 
                 if done { break; }
             }
@@ -278,7 +322,9 @@ impl TagFS {
     ///
     /// Can be called with reply as None to do a 'fake' readdir for its side
     /// effects only.
-    fn readdir_helper(&mut self, inode: u64, offset: i64, reply: Option<ReplyDirectory>) {
+    fn readdir_helper(&mut self, inode: u64, offset: i64,
+                      reply: Option<ReplyDirectory>)
+    {
         let attr = self.entries.get_attr(inode);
 
         if attr.kind == FileType::Directory {
@@ -288,18 +334,23 @@ impl TagFS {
                 EntryType::TagDir => {
                     if let Some(tag) = self.db.get_tag(name) {
                         if tag.takes_value {
-                            self.readdir_values(&tag.name, inode, offset, reply);
+                            self.readdir_values(&tag.name, inode,
+                                offset, reply);
                         } else {
-                            self.readdir_files(&tag.name, None, inode, offset, reply);
+                            self.readdir_files(&tag.name, None,
+                                inode, offset, reply);
                         }
                     } else {
-                        panic!("programming error: tried to readdir for directory that is not a tag.");
+                        panic!("programming error: tried to readdir for a \
+                                directory without a tag in the database.");
                     }
                 }
                 EntryType::ValueDir => {
-                    let tag_name = self.entries.get_parent_tag(inode).to_string();
+                    let tag_name = self.entries.get_parent_tag(inode)
+                        .to_string();
                     let value = self.entries.get_tag_value(inode).to_string();
-                    self.readdir_files(&tag_name, Some(&value), inode, offset, reply);
+                    self.readdir_files(&tag_name, Some(&value),
+                        inode, offset, reply);
                 }
 
                 // query dir contains stored queries and nothing else.
@@ -317,8 +368,8 @@ impl TagFS {
 
                 // cannot readdir something that is not a directory and the
                 // root is already covered.
-                EntryType::Root | EntryType::Link | EntryType::AllTagsTerminal =>
-                    unreachable!(),
+                EntryType::Root | EntryType::Link | EntryType::AllTagsTerminal
+                    => unreachable!(),
             }
         }
     }
@@ -340,10 +391,10 @@ impl fuser::Filesystem for TagFS {
         info!("lookup(parent_ino: {parent:#x?}, name: {name:?})");
 
         // for now at least, we are only going to allow valid unicode.
-        let name = name.to_str().map_or_else(|| {
+        let name = name.to_str().unwrap_or_else(|| {
                 error!("tried to lookup non-unicode name \"{name:?}\"");
                 panic!("tried to lookup non-unicode name \"{name:?}\"");
-            }, |name| name);
+            });
 
         // We call the readdir helper functions to ensure that we create the
         // child inodes as soon as possible. This ensures that even if readdir
@@ -356,7 +407,8 @@ impl fuser::Filesystem for TagFS {
             }
         } else if parent == self.entries.get_or_create_query_directory() {
 
-            let inode = self.entries.get_or_create_query_result_dir(name, name);
+            let inode = self.entries.get_or_create_query_result_dir(
+                name, name);
             let query = self.entries.get_query(inode);
 
             info!("Running database query \"{query}\".");
@@ -407,12 +459,17 @@ impl fuser::Filesystem for TagFS {
         panic!("could not find link target for inode: {inode:#x?}.");
     }
 
-    fn open(&mut self, _req: &Request, inode: u64, _flags: i32, reply: ReplyOpen) {
+    fn open(&mut self, _req: &Request, inode: u64, _flags: i32,
+            reply: ReplyOpen)
+    {
         info!("open(inode: {inode:#x?})");
 
-        if self.entries.get_type(inode) != EntryType::AllTagsTerminal {
-            error!("tried to open a file that is not a file! inode: {inode:#x?}.");
-            panic!("tried to open a file that is not a file! inode: {inode:#x?}.");
+        if !matches!(self.entries.get_type(inode), EntryType::AllTagsTerminal)
+        {
+            error!("tried to open a file that is not a file! inode: \
+                    {inode:#x?}.");
+            panic!("tried to open a file that is not a file! inode: \
+                    {inode:#x?}.");
         }
 
         reply.opened(0, 0);
@@ -423,9 +480,12 @@ impl fuser::Filesystem for TagFS {
     {
         info!("read(inode: {inode:#x?}, offset: {offset:?}, size: {size:?})");
 
-        if self.entries.get_type(inode) != EntryType::AllTagsTerminal {
-            error!("tried to read a file that is not a file! inode: {inode:#x?}.");
-            panic!("tried to read a file that is not a file! inode: {inode:#x?}.");
+        if !matches!(self.entries.get_type(inode), EntryType::AllTagsTerminal)
+        {
+            error!("tried to read a file that is not a file! inode: \
+                    {inode:#x?}.");
+            panic!("tried to read a file that is not a file! inode: \
+                    {inode:#x?}.");
         }
 
         let path = self.entries.get_path(inode);
@@ -436,7 +496,8 @@ impl fuser::Filesystem for TagFS {
             for tag in tags {
                 // unwrap is okay here, because we are writing to an in-memory
                 // string buffer.
-                writeln!(buf, "{}", crate::db::SimpleTagFormatter(&tag)).unwrap();
+                writeln!(buf, "{}", crate::db::SimpleTagFormatter::from(&tag))
+                    .unwrap();
             }
         }
 
@@ -476,7 +537,8 @@ fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
     fn basename(path: &str) -> std::borrow::Cow<str> {
         let path = std::path::Path::new(path);
         let Some(file_name) = path.file_name() else {
-            panic!("invalid path \"{}\" without final component.", path.display());
+            panic!("invalid path \"{}\" without final component.",
+                   path.display());
         };
 
         file_name.to_string_lossy()
@@ -495,6 +557,8 @@ fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
     }
 }
 
+/// Convert a value from the database into a value that is suitable for use as
+/// a component of a path in the filesystem.
 fn sanitise_value(path: &str) -> String {
     path.replace('/', "_")
 }

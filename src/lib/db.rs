@@ -1,8 +1,9 @@
 //! Module that handles interfacing with the sqlite database.
 
 mod query;
-pub use query::TagValuePair;
-pub use query::TagValuePairListFormatter;
+pub use query::{
+    TagValuePair, ListFormatter, SimpleTagFormatter, EscapedTagFormatter,
+};
 
 mod edit_repr;
 
@@ -14,7 +15,7 @@ use crate::error::TagFSErrorExt;
 
 /// Analogue to the database table.
 #[derive(Debug)]
-pub struct Tag {
+pub struct TagInfo {
     id: i64,
     pub name: String,
     pub takes_value: bool,
@@ -24,25 +25,24 @@ pub struct Tag {
 #[derive(Debug)]
 pub struct TagMapping {
     _id: i64,
-    pub tag: Tag,
+    pub tag: TagInfo,
     pub path: String,
     pub value: Option<String>,
     pub auto: bool,
 }
 
-/// Newtype wrapper struct to print a tag mapping.
-///
-/// A newtype is used (rather than implementing [`std::fmt::Display`] directly
-/// on [`TagMapping`]) because it allows the easy creation of multiple
-/// differing Display implementations.
-pub struct SimpleTagFormatter<'a>(pub &'a TagMapping);
-impl<'a> std::fmt::Display for SimpleTagFormatter<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(value) = &self.0.value {
-            write!(f, "{}={}", self.0.tag.name, value)
-        } else {
-            write!(f, "{}", self.0.tag.name)
-        }
+pub trait Tag<'a> {
+    fn tag(&'a self) -> &'a str;
+    fn value(&'a self) -> Option<&'a str>;
+}
+
+impl<'a> Tag<'a> for TagMapping {
+    fn tag(&'a self) -> &'a str {
+        &self.tag.name
+    }
+
+    fn value(&'a self) -> Option<&'a str> {
+        self.value.as_deref()
     }
 }
 
@@ -113,11 +113,11 @@ impl Database {
 
     /// This function tries to find a tag matching the str in the database, if
     /// it does not exist it returns None.
-    pub fn get_tag(&self, tag: &str) -> Option<Tag> {
+    pub fn get_tag(&self, tag: &str) -> Option<TagInfo> {
         self.conn.query_row(
             "SELECT TagID, Name, TakesValue FROM Tag WHERE Name = ?",
             rusqlite::params![tag],
-            |row| Ok(Tag {
+            |row| Ok(TagInfo {
                 id: row.get(0)?,
                 name: row.get(1)?,
                 takes_value: row.get(2)?
@@ -128,14 +128,14 @@ impl Database {
     /// This function creates a tag in the database.
     ///
     /// It can fail if a tag already exists with the same name.
-    fn create_tag(&mut self, tag: &str, takes_value: bool) -> Result<Tag> {
+    fn create_tag(&mut self, tag: &str, takes_value: bool) -> Result<TagInfo> {
         let mut stmt = self.conn.prepare_cached(
             "INSERT INTO Tag (Name, TakesValue) VALUES (?, ?)",
         )?;
 
         stmt.execute(rusqlite::params![tag, takes_value])?;
 
-        Ok(Tag {
+        Ok(TagInfo {
             id: self.conn.last_insert_rowid(),
             name: tag.to_string(),
             takes_value,
@@ -143,7 +143,9 @@ impl Database {
     }
 
     /// Helper function to perform a manual tag.
-    pub fn tag(&mut self, path: &str, tag_name: &str, value: Option<&str>) -> Result<()> {
+    pub fn tag(&mut self, path: &str, tag_name: &str, value: Option<&str>)
+        -> Result<()>
+    {
         self.tag_inner(path, tag_name, value, false)
     }
 
@@ -153,14 +155,17 @@ impl Database {
     /// It can fail if a mapping already exists with the same tag, path and
     /// value. It can also fail if the tag is required to take a value and one
     /// was not given or the opposite.
-    fn tag_inner(&mut self, path: &str, tag_name: &str, value: Option<&str>, auto: bool)
+    fn tag_inner(&mut self, path: &str, tag_name: &str, value: Option<&str>,
+                 auto: bool)
         -> Result<()>
     {
         let tag = if let Some(tag) = self.get_tag(tag_name) {
             if tag.takes_value && value.is_none() {
-                bail!("tag \"{}\" takes a value but one was not given", tag_name);
+                bail!("tag \"{}\" takes a value but one was not given",
+                      tag_name);
             } else if !tag.takes_value && value.is_some() {
-                bail!("tag \"{}\" does not take a value but one was given", tag_name);
+                bail!("tag \"{}\" does not take a value but one was given",
+                      tag_name);
             }
             tag
         } else {
@@ -168,7 +173,8 @@ impl Database {
         };
 
         let mut stmt = self.conn.prepare_cached(
-            "INSERT INTO TagMapping (TagID, Path, Value, Auto) VALUES (?, ?, ?, ?)"
+            "INSERT INTO TagMapping (TagID, Path, Value, Auto) \
+             VALUES (?, ?, ?, ?)"
         )?;
 
         let res = stmt.execute(rusqlite::params![tag.id, path, value, auto])
@@ -177,7 +183,8 @@ impl Database {
         if res.is_sql_unique_cons_err() {
             if let Some(value) = value {
                 res.with_context(||
-                    format!("\"{path}\" already has tag \"{tag_name}={value}\"."))?;
+                    format!("\"{path}\" already has tag \
+                             \"{tag_name}={value}\"."))?;
             } else {
                 res.with_context(||
                     format!("\"{path}\" already has tag \"{tag_name}\"."))?;
@@ -264,7 +271,7 @@ impl Database {
         let tags = stmt.query_map(rusqlite::params_from_iter(&params),
             |row| {
                 Ok(TagMapping {
-                    tag: Tag {
+                    tag: TagInfo {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         takes_value: row.get(2)?,
@@ -368,9 +375,11 @@ impl Database {
 
         if n == 0 {
             if let Some(value) = value {
-                bail!("could not remove tag \"{tag}={value}\" from \"{path}\". Does it exist?");
+                bail!("could not remove tag \"{tag}={value}\" from \
+                       \"{path}\". Does it exist?");
             } else {
-                bail!("could not remove tag \"{tag}\" from \"{path}\". Does it exist?");
+                bail!("could not remove tag \"{tag}\" from \"{path}\". \
+                       Does it exist?");
             }
         }
 
@@ -386,7 +395,8 @@ impl Database {
         )?;
 
         if n == 0 {
-            bail!("could not remove tags from path \"{path}\". Does it exist?");
+            bail!("could not remove tags from path \"{path}\". \
+                   Does it exist?");
         }
 
         Ok(())
@@ -459,11 +469,8 @@ impl Database {
         ")?;
 
         let all_valid = stmt.query_map([], |row| row.get::<_, String>(0))?
-            .all(|path| if let Ok(path) = path {
-                std::path::Path::new(&path).exists()
-            } else {
-                false
-            });
+            .all(|path| path.map_or(false,
+                |path| std::path::Path::new(&path).exists()));
 
         Ok(all_valid)
     }

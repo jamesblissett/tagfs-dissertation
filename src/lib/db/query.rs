@@ -5,6 +5,8 @@ mod tests;
 
 use anyhow::{bail, Result};
 
+use super::{Database, Tag};
+
 static SQL_PARTIAL_SELECT_START: &str = "\
 SELECT TagMapping.Path, TagMapping.TagMappingID \
 FROM TagMapping \
@@ -45,7 +47,9 @@ static SQL_PARTIAL_EQ_VALUE: &str = "\
 TagMapping.Path IN ( \
     SELECT TagMapping.Path \
     FROM TagMapping INNER JOIN Tag ON Tag.TagID = TagMapping.TagID \
-    WHERE Tag.Name = ? AND TagMapping.Value LIKE ('%' || ? || '%') ESCAPE '\\' \
+    WHERE \
+        Tag.Name = ? \
+        AND TagMapping.Value LIKE ('%' || ? || '%') ESCAPE '\\' \
     COLLATE NOCASE \
 )";
 
@@ -220,7 +224,8 @@ fn to_sql(tokens: &[Token], case_sensitive: bool)
                         if let Some(Value(value)) = value {
 
                             if case_sensitive {
-                                sql.push_str(SQL_PARTIAL_STRICT_EQ_VALUE_CASE_SENS);
+                                sql.push_str(
+                                    SQL_PARTIAL_STRICT_EQ_VALUE_CASE_SENS);
                             } else {
                                 sql.push_str(SQL_PARTIAL_STRICT_EQ_VALUE);
                             }
@@ -340,6 +345,16 @@ pub struct TagValuePair {
     pub value: Option<String>,
 }
 
+impl<'a> Tag<'a> for TagValuePair {
+    fn tag(&'a self) -> &'a str {
+        &self.tag
+    }
+
+    fn value(&'a self) -> Option<&'a str> {
+        self.value.as_deref()
+    }
+}
+
 impl std::str::FromStr for TagValuePair {
     type Err = TagValuePairParseError;
 
@@ -362,64 +377,84 @@ impl std::str::FromStr for TagValuePair {
     }
 }
 
-impl std::fmt::Display for TagValuePair {
+/// Newtype wrapper struct to print a tag mapping.
+///
+/// A newtype is used (rather than implementing [`std::fmt::Display`] directly
+/// on [`TagMapping`]) because it allows the easy creation of multiple
+/// differing Display implementations.
+pub struct SimpleTagFormatter<'a, T: Tag<'a>>(&'a T);
+
+impl<'a, T: Tag<'a>> std::fmt::Display for SimpleTagFormatter<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(value) = &self.value {
-            write!(f, "{}={}", self.tag, value)
+        if let Some(value) = &self.0.value() {
+            write!(f, "{}={}", self.0.tag(), value)
         } else {
-            write!(f, "{}", self.tag)
+            write!(f, "{}", self.0.tag())
         }
     }
 }
 
-/// Implements a version of display for a [`TagValuePair`] where the value of tags
-/// are correctly escaped.
-pub struct EscapedTagFormatter<'a, X: AsRef<str>, Y: AsRef<str>>(pub &'a X, pub Option<&'a Y>);
-impl<'a, X: AsRef<str>, Y: AsRef<str>> std::fmt::Display for EscapedTagFormatter<'a, X, Y> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.1.is_some() {
-            write!(f, "{}=", self.0.as_ref())?;
-            self.write_escaped_value(f)
-        } else {
-            write!(f, "{}", self.0.as_ref())
-        }
+impl<'a, T: Tag<'a>> From<&'a T> for SimpleTagFormatter<'a, T> {
+    fn from(tag: &'a T) -> Self {
+        Self(tag)
     }
 }
 
-impl<'a, X: AsRef<str>, Y: AsRef<str>> EscapedTagFormatter<'a, X, Y> {
+/// Implements a version of display for a [`TagValuePair`] or
+/// [`TagMapping`] where the value of tags are correctly escaped.
+pub struct EscapedTagFormatter<'a, T: Tag<'a>>(&'a T);
 
-    /// Helper function to write an escaped value to a formatter.
-    ///
-    /// # Panics
-    /// Panics when the inner [`TagValuePair`] has no value.
-    fn write_escaped_value(&self, f: &mut std::fmt::Formatter<'_>)
-        -> std::fmt::Result
-    {
-        assert!(self.1.is_some(),
-            "programming error: tried to format value when value is none!");
+impl<'a, T: Tag<'a>> std::fmt::Display for EscapedTagFormatter<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(value) = self.0.value() {
+            write!(f, "{}=", self.0.tag())?;
 
-        for c in self.1.unwrap().as_ref().chars() {
-            match c {
-                '"' | ' ' | '\\' | '(' | ')' => write!(f, "\\{c}")?,
-                c => write!(f, "{c}")?,
+            for c in value.chars() {
+                match c {
+                    '"' | ' ' | '\\' | '(' | ')' => write!(f, "\\{c}")?,
+                    c => write!(f, "{c}")?,
+                }
             }
+
+            Ok(())
+        } else {
+            write!(f, "{}", self.0.tag())
         }
-        Ok(())
     }
 }
 
-/// Wrapper struct to implement Display on a list of [`TagValuePair`].
-pub struct TagValuePairListFormatter<'a>(pub &'a [TagValuePair]);
-impl<'a> std::fmt::Display for TagValuePairListFormatter<'a> {
+impl<'a, T: Tag<'a>> From<&'a T> for EscapedTagFormatter<'a, T> {
+    fn from(tag: &'a T) -> Self {
+        Self(tag)
+    }
+}
+
+/// Wrapper struct to implement Display on a list of tags.
+pub struct ListFormatter<XS, X>(XS)
+where XS: Iterator<Item = X> + Clone,
+      X: std::fmt::Display;
+
+impl<XS, X> std::fmt::Display for ListFormatter<XS, X>
+where X: std::fmt::Display, XS: Iterator<Item = X> + Clone
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(tag) = self.0.first() {
+        let mut xs = self.0.clone();
+        if let Some(tag) = xs.next() {
             write!(f, "\"{tag}\"")?;
 
-            for tag in self.0.iter().skip(1) {
+            for tag in xs {
                 write!(f, ", \"{tag}\"")?;
             }
         }
         Ok(())
+    }
+}
+
+impl<XS, X> From<XS> for ListFormatter<XS, X>
+where X: std::fmt::Display, XS: Iterator<Item = X> + Clone
+{
+    fn from(value: XS) -> Self {
+        Self(value)
     }
 }
 
@@ -435,7 +470,7 @@ impl Query {
 
     /// Runs the query on the provided database and returns the list of paths
     /// that match.
-    pub fn execute(self, db: &mut super::Database) -> Result<Vec<(String, u64)>> {
+    pub fn execute(self, db: &mut Database) -> Result<Vec<(String, u64)>> {
         let mut stmt = db.conn.prepare_cached(&self.sql)?;
         let params = rusqlite::params_from_iter(self.params);
 
@@ -446,9 +481,9 @@ impl Query {
         Ok(paths)
     }
 
-    // To build a query it is simply split into tokens and converted directly to
-    // SQL. There is no need for proper parsing because the query language has
-    // the same structure as the SQL query.
+    // To build a query it is simply split into tokens and converted directly
+    // to SQL. There is no need for proper parsing because the query language
+    // has the same structure as the SQL query.
     pub fn from_raw(s: &str, case_sensitive: bool) -> Result<Self> {
         let tokens = lex_query(s);
         let (sql, params) = to_sql(&tokens, case_sensitive)?;

@@ -33,12 +33,19 @@ const COMMENT_PREFIX: &str = "//";
 
 /// Writes the contents of the database to the out buffer in the edit
 /// representation format.
-pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write) -> Result<()> {
-    writeln!(out, "{COMMENT_PREFIX} {} v{}", clap::crate_name!(), clap::crate_version!())?;
-    writeln!(out, "{COMMENT_PREFIX} You can edit this file as you please, but bear in mind to escape double")?;
-    writeln!(out, "{COMMENT_PREFIX} quotes and spaces in tag values (or use double quotes around the value).")?;
+pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write)
+    -> Result<()>
+{
+    writeln!(out, "{COMMENT_PREFIX} {} v{}",
+        clap::crate_name!(), clap::crate_version!())?;
+
+    writeln!(out, "{COMMENT_PREFIX} You can edit this file as you please, but \
+                   bear in mind to escape double")?;
+    writeln!(out, "{COMMENT_PREFIX} quotes and spaces in tag values (or use \
+                   double quotes around the value).")?;
     writeln!(out, "{COMMENT_PREFIX}")?;
-    writeln!(out, "{COMMENT_PREFIX} All tags default to manual tags, however any tags after the \"{AUTOTAG_LINE_SEPARATOR}\"")?;
+    writeln!(out, "{COMMENT_PREFIX} All tags default to manual tags, however \
+                   any tags after the \"{AUTOTAG_LINE_SEPARATOR}\"")?;
     writeln!(out, "{COMMENT_PREFIX} header are marked as autotags.")?;
 
     let path_map = db.dump()?;
@@ -50,7 +57,7 @@ pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write) -> Result<()>
 
         // write the manual tags.
         for tag in tags.iter().filter(|tag| !tag.auto) {
-            let tag_fmt = EscapedTagFormatter(&tag.tag.name, tag.value.as_ref());
+            let tag_fmt = EscapedTagFormatter::from(tag);
             writeln!(out, "{tag_fmt}")?;
         }
 
@@ -60,7 +67,7 @@ pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write) -> Result<()>
             writeln!(out, "{AUTOTAG_LINE_SEPARATOR}")?;
         }
         for tag in autotags {
-            let tag_fmt = EscapedTagFormatter(&tag.tag.name, tag.value.as_ref());
+            let tag_fmt = EscapedTagFormatter::from(tag);
             writeln!(out, "{tag_fmt}")?;
         }
 
@@ -75,7 +82,7 @@ pub fn to_edit_repr(db: &Database, out: &mut impl std::fmt::Write) -> Result<()>
 pub fn from_edit_repr(input: &mut impl std::io::BufRead)
     -> Result<IndexMap<String, Vec<(bool, TagValuePair)>>>
 {
-    let mut path_map: IndexMap<String, Vec<(bool, TagValuePair)>> = IndexMap::new();
+    let mut path_map: IndexMap<_, Vec<(bool, TagValuePair)>> = IndexMap::new();
 
     let mut line_num = 0;
 
@@ -116,7 +123,8 @@ pub fn from_edit_repr(input: &mut impl std::io::BufRead)
             inside_block = true;
 
         } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR && auto {
-            bail!("cannot have multiple AUTO sections in one block. Line {line_num}");
+            bail!("cannot have multiple AUTO sections in one block. \
+                   Line {line_num}");
 
         } else if inside_block && buf == AUTOTAG_LINE_SEPARATOR && !auto {
             auto = true;
@@ -131,7 +139,8 @@ pub fn from_edit_repr(input: &mut impl std::io::BufRead)
             tags.push((auto, tag));
 
         } else if !inside_block {
-            bail!("cannot have non empty lines outside of a block. Line {line_num}");
+            bail!("cannot have non empty lines outside of a block. \
+                   Line {line_num}");
         }
 
         // make sure to reset the buffer before the next iteration.

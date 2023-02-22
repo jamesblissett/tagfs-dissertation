@@ -181,7 +181,8 @@ impl Args {
         // create our own directory within XDG_DATA_HOME.
         db_dir.push("tagfs");
         std::fs::create_dir_all(&db_dir).with_context(||
-            format!("could not create directory \"{}\" for the database.", db_dir.display()))?;
+            format!("could not create directory \"{}\" for the database.",
+                    db_dir.display()))?;
 
         // add our database file to the path.
         db_dir.push("default.db");

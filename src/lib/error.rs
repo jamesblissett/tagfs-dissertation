@@ -1,9 +1,10 @@
-//! Helper module that contains an extension trait for the [`anyhow::Result`] type.
+//! Helper module that contains an extension trait for the [`anyhow::Result`]
+//! type.
 
 /// Extension trait for [`anyhow::Result`].
-pub(crate) trait TagFSErrorExt {
-    /// Should return true if the underlying error is a [`rusqlite::Error`] and it
-    /// represents a failure of a unique constraint within the database.
+pub trait TagFSErrorExt {
+    /// Should return true if the underlying error is a [`rusqlite::Error`] and
+    /// it represents a failure of a unique constraint within the database.
     fn is_sql_unique_cons_err(&self) -> bool;
 }
 
