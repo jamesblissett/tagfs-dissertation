@@ -4,6 +4,7 @@
 mod tests;
 
 use anyhow::{bail, Result};
+use log::info;
 
 use super::{Database, Tag};
 
@@ -81,6 +82,9 @@ enum Token {
     GreaterThan,
     Tag(String),
     Value(String),
+    // TODO: maybe add an 'any' tag to search for values e.g. '_=hello'
+    //       would match any tag that contains the value hello.
+    // AnyTag,
 }
 
 impl Token {
@@ -486,6 +490,9 @@ impl Query {
     // has the same structure as the SQL query.
     pub fn from_raw(s: &str, case_sensitive: bool) -> Result<Self> {
         let tokens = lex_query(s);
+
+        info!("Lexed query \"{s}\" as {:?}", tokens);
+
         let (sql, params) = to_sql(&tokens, case_sensitive)?;
 
         Ok(Self { _raw: String::from(s), sql, params })

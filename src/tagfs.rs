@@ -14,7 +14,8 @@ use libtagfs::db::{Database, TagValuePair};
 
 use cli::{
     Args, Command, EditCommand, MountCommand, PrefixCommand, QueryCommand,
-    TagCommand, TagsCommand, UntagCommand,
+    StoredQueriesCommand, StoredQueriesSubCommand, TagCommand, TagsCommand,
+    UntagCommand,
 };
 
 #[cfg(feature = "autotag")]
@@ -184,6 +185,43 @@ fn edit_main(_command: EditCommand, mut db: Database) -> Result<()> {
     Ok(())
 }
 
+/// StoredQueries subcommand entry point
+fn stored_queries_main(command: StoredQueriesSubCommand, mut db: Database)
+    -> Result<()>
+{
+    use StoredQueriesSubCommand::*;
+
+    match command {
+        List => {
+            let stored_queries = db.stored_queries()
+                .context("unexpected error retrieving stored queries")?;
+
+            if stored_queries.is_empty() {
+                bail!("no stored queries in the database.");
+            }
+
+            for stored_query in stored_queries {
+                println!("{}", stored_query);
+            }
+        }
+        Create { name, query } => {
+            db.create_stored_query(&name, &query)
+                .with_context(|| format!("stored query with name \"{name}\" \
+                                          already exists."))?;
+        }
+        Delete { query_to_delete } => {
+            let deleted_something = db.delete_stored_query(&query_to_delete)?;
+
+            if !deleted_something {
+                bail!("stored query with name \"{query_to_delete}\" does not \
+                       exist.");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // TODO: ensure path exists and inform user if not.
 #[cfg(feature = "autotag")]
 /// Autotag subcommand entry point.
@@ -264,6 +302,11 @@ fn main() {
         Command::Query(query_command) => query_main(query_command, db),
         Command::Prefix(prefix_command) => prefix_main(prefix_command, db),
         Command::Edit(edit_command) => edit_main(edit_command, db),
+
+        Command::StoredQueries(StoredQueriesCommand { command }) => {
+            let command = command.unwrap_or(StoredQueriesSubCommand::List);
+            stored_queries_main(command, db)
+        }
 
         #[cfg(feature = "autotag")]
         Command::Autotag(autotag_command) => autotag_main(autotag_command, db),

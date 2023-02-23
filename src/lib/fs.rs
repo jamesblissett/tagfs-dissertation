@@ -232,26 +232,23 @@ impl TagFS {
     fn readdir_query_dir(&mut self, offset: i64,
                          mut reply: Option<ReplyDirectory>)
     {
-        // TODO: put these into the database.
-        let stored_queries = vec![
-            ("medium-watch",
-                "runtime > 100 and runtime < 130 and not watched"),
-            ("unwatched",
-                "not watched and type=film"),
-        ];
-        let stored_queries = stored_queries.iter()
-            .map(|(name, query)| (format!("{name} @ [{query}]"), query));
+        let Ok(stored_queries) = self.db.stored_queries() else {
+            if let Some(reply) = reply { reply.ok() }
+            return;
+        };
 
-        let stored_queries_offset = stored_queries
+        let stored_queries_offset = stored_queries.iter()
+            .map(crate::db::SanitisedStoredQuery::from)
             .enumerate().skip(offset as usize);
 
-        for (idx, (name, query)) in stored_queries_offset {
+        for (idx, stored_query) in stored_queries_offset {
+            let stored_query_display = stored_query.to_string();
             let child_inode = self.entries.get_or_create_query_result_dir(
-                query, &name);
+                &stored_query.query(), &stored_query_display);
 
             let done = reply.as_mut().map_or(false, |reply|
                 reply.add(child_inode, (idx + 1) as i64,
-                    FileType::Symlink, &name));
+                    FileType::Symlink, &stored_query_display));
 
             if done { break; }
         }

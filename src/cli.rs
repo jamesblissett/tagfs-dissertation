@@ -90,6 +90,42 @@ pub struct PrefixCommand {
 pub struct EditCommand {
 }
 
+/// Handles the stored-queries command args.
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum StoredQueriesSubCommand {
+
+    /// List the queries stored in the database. (default)
+    #[command(name = "list")]
+    List,
+
+    /// Store a new query in the database.
+    #[command(name = "create", visible_alias = "add")]
+    Create {
+        /// Name of the new query.
+        #[arg(required = true, value_name = "name")]
+        name: String,
+
+        /// The new query.
+        #[arg(required = true, value_name = "query")]
+        query: String,
+    },
+
+    /// Remove a query from the database.
+    #[command(name = "remove", visible_alias = "delete")]
+    Delete {
+        /// Name of the query to remove from the database.
+        #[arg(required = true, value_name = "query")]
+        query_to_delete: String,
+    },
+}
+
+/// Wrapper struct to make arguements to the stored-queries command optional.
+#[derive(clap::Args, Clone, Debug)]
+pub struct StoredQueriesCommand {
+    #[command(subcommand)]
+    pub command: Option<StoredQueriesSubCommand>,
+}
+
 /// Contains a subcommand and the specific struct pertaining to it.
 #[derive(clap::Subcommand, Debug)]
 pub enum Command {
@@ -138,6 +174,9 @@ pub enum Command {
 
     /// Edit the tags database using a text editor.
     Edit(EditCommand),
+
+    /// List, create and delete stored queries in the database.
+    StoredQueries(StoredQueriesCommand),
 }
 
 /// Contains the parsed arguments from the command line.

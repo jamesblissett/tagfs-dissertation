@@ -6,6 +6,8 @@ pub use query::{
 };
 
 mod edit_repr;
+mod stored_query;
+pub use stored_query::{SanitisedStoredQuery, StoredQuery};
 
 use anyhow::{anyhow, bail, Context, Result};
 use indexmap::map::IndexMap;
@@ -108,7 +110,50 @@ impl Database {
             UNIQUE(TagID, ValueUniqConstraint, Path)
         )")?;
 
+        self.conn.execute_batch("CREATE TABLE IF NOT EXISTS StoredQueries (
+            StoredQueryID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            Query TEXT NOT NULL,
+            UNIQUE(Name)
+        )")?;
+
         Ok(())
+    }
+
+    /// Return a list of all stored queries in the database.
+    pub fn stored_queries(&self) -> Result<Vec<StoredQuery>> {
+        let mut stmt = self.conn.prepare_cached("
+            SELECT StoredQueries.Name, StoredQueries.Query FROM StoredQueries
+        ")?;
+
+        let stored_queries = stmt.query_map([], |row| Ok(StoredQuery {
+            name: row.get(0)?, query: row.get(1)?
+        }))?.collect::<rusqlite::Result<_>>()?;
+
+        Ok(stored_queries)
+    }
+
+    /// Create a stored query in the database.
+    pub fn create_stored_query(&mut self, name: &str, query: &str)
+        -> Result<()>
+    {
+        self.conn.execute("
+            INSERT INTO StoredQueries (Name, Query) VALUES (?, ?)",
+            &[name, query]
+        )?;
+
+        Ok(())
+    }
+
+    /// Delete a stored query in the database by name. Returns whether any
+    /// deletion occured.
+    pub fn delete_stored_query(&mut self, name: &str) -> Result<bool> {
+        let n = self.conn.execute("
+            DELETE FROM StoredQueries WHERE StoredQueries.Name = ?",
+            &[name]
+        )?;
+
+        Ok(n != 0)
     }
 
     /// This function tries to find a tag matching the str in the database, if
