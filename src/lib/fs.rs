@@ -528,7 +528,8 @@ pub fn mount(mnt_point: &str, db: Database) -> std::io::Result<()> {
 
 /// Converts a full path (such as "my/long/path") to its final component.
 fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
-                                siblings: impl Iterator<Item=T>) -> String
+                                siblings: impl Iterator<Item=T>)
+    -> String
 {
 
     fn basename(path: &str) -> &str {
@@ -543,12 +544,22 @@ fn sanitise_path<T: AsRef<str>>(path: &str, path_idx: usize,
 
     let path_basename = basename(path);
 
-    let any_path_same_name = siblings.enumerate()
-        .any(|(idx, sibling)|
-            idx != path_idx && basename(sibling.as_ref()) == path_basename);
+    let mut any_path_same_name = false;
+    let n = siblings.enumerate()
+        .fold(0, |acc, (idx, name)| {
+            if basename(name.as_ref()) == path_basename {
+                if idx != path_idx {
+                    any_path_same_name = true;
+                }
+                if idx < path_idx {
+                    return acc + 1;
+                }
+            }
+            return acc;
+        });
 
     if any_path_same_name {
-        format!("{path_basename}.{path_idx}")
+        format!("{path_basename}.{n}")
     } else {
         String::from(path_basename)
     }
@@ -566,16 +577,16 @@ mod tests {
         let path1 = "/my/long/file/path.txt";
         let path2 = "/my/other/long/file/path.txt";
         let path3 = "/some/other/file/path.txt";
-        let siblings = vec![path2, "/some/other/file", path3];
+        let siblings = vec![path1, path2, "/some/other/file", path3];
 
         assert_eq!(
             super::sanitise_path(path1, 0, siblings.iter()),
             String::from("path.txt.0")
         );
 
-        let siblings = vec![path1, "/some/other/file", path3];
+        let siblings = vec![path1, "/some/other/file", path2, path3];
         assert_eq!(
-            super::sanitise_path(path2, 1, siblings.iter()),
+            super::sanitise_path(path2, 2, siblings.iter()),
             String::from("path.txt.1")
         );
 
