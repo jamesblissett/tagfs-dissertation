@@ -44,7 +44,8 @@ of the steps taken to reach a file or directory. Using the previous example the
 path would be \texttt{/documents/project1/timeline.txt}. As a result of the
 single parent rule, each file or directory has a single path that uniquely
 identifies it amongst all other files and directories in the hierarchy.
-\todo{This is not true when you add links into the equation.}
+\todo{This is not true when you add links into the equation.} \todo{Explain the
+difference between absolute and relative paths.}
 
 % Sample file hierarchy figure {{{
 \begin{figure}[h]
@@ -89,7 +90,7 @@ identifies it amongst all other files and directories in the hierarchy.
 \end{figure}
 % }}}
 
-\subsection{System Calls and the File System}
+\subsection{Operating Systems and the File System}
 
 \todo{
     Talk about how ls makes a system call and the kernel receives it and then
@@ -98,3 +99,33 @@ identifies it amongst all other files and directories in the hierarchy.
     libc function mount with fs type 'fuse'. In my case fuser calls fusermount3
     and listens to the returned unix socket for messages from the kernel.
 }
+
+The primary way most users interact with file systems is through a GUI
+(graphical user interface) file manager such as \texttt{thunar} or
+\texttt{nautilus}. \todo{Maybe screenshot of file manager with tree view?}
+However, it is also possible to manage a file system without a GUI and use CLI
+(command line interface) tools such as \texttt{ls} or \texttt{mv}. Both GUI
+file managers and CLI tools utilise the low level interface exposed by the
+operating system and implemented by a particular file system. The traditional
+way to use this interface is via a library exposed by the operating
+system\footnote{\todo{Something about how libc is required on Windows because
+it does not have a stable syscall interface.}}. \todo{Not sure if I should stay
+abstract about a particular operating system or be specifically about
+UNIX-likes here.} On UNIX-like operating systems this library is \texttt{libc}.
+\todo{Do I need to talk about the difference between an abstract libc and
+concrete like glibc or musl?} The overwhelming majority of programs that run on
+UNIX-like operating systems use \texttt{libc} to help them interact with the
+platform. The operating systems' \texttt{libc} contains functions that require
+access to the file system (such as \texttt{stat}). To get access to the file
+system the \texttt{libc} function will execute a system call (often called a
+syscall). A system call is a way for an unprivileged user program to ask the
+operating system to perform an action on its behalf. When executed, a system
+call performs a context switch and jumps into kernel code\footnote{\todo{Not
+necessarily! See virtual syscalls and vdso on linux.}}. The kernel is the part
+of the operating system that, amongst many other functions, responds to system
+calls. When the kernel responds to a system call that requires accessing the
+file system, it must first ascertain which file system implementation to call.
+\todo{On Linux this is the VFS layer in the kernel.} Once this is determined
+the kernel asks the file system implementation to perform the action specified
+by the system call. It also may return some data to the calling user program
+via a buffer or a return value.
