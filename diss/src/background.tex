@@ -43,9 +43,43 @@ of steps is known as a path and can be written as a \texttt{/} delimited list
 of the steps taken to reach a file or directory. Using the previous example the
 path would be \texttt{/documents/project1/timeline.txt}. As a result of the
 single parent rule, each file or directory has a single path that uniquely
-identifies it amongst all other files and directories in the hierarchy.
-\todo{This is not true when you add links into the equation.} \todo{Explain the
-difference between absolute and relative paths.}
+identifies it amongst all other files and directories in the hierarchy. This
+single unique path is known as an absolute path, meaning the steps to arrive at
+a file or directory are completely specified all the way from the root of the
+file system\footnote{This is not the case when the file system contains
+symbolic links.}. In contrast to this, a relative path is a path that is not
+specified from the root of the file system, but from some other arbitrary
+location. For example, the path \texttt{project1/timeline.txt} is a relative
+path that is specified from the \texttt{documents} directory. The directory
+that a relative path is specified from is known as the current working
+directory.
+
+The strict hierarchical nature of the file system falls apart with the addition
+of links to the file system. There are two types of links in UNIX file systems:
+hard links and symbolic (or soft) links. Symbolic links (often abbreviated as
+symlinks) are a special kind of file-like object that act as a window into
+another part of the file system. Symbolic links have a name like a normal file,
+but they additionally have a target which is another path that they act as a
+window into. For example, you could imagine a symbolic link named
+\texttt{my-link} in the \texttt{images} directory with a target of
+\texttt{/code}. The existence of this link would mean that now the path
+\texttt{/images/my-link/main.c} refers to the same file as
+\texttt{/code/main.c} (the same property holds for
+\texttt{/images/my-link/Makefile} also). \todo{Talk about how symbolic links
+can introduce cycles.}
+
+A hard link is a reference to a piece of data. Hard links are very similar to
+regular files, because regular files are in fact hard links. A hard link
+references an inode\footnote{\todo{Explain that even Dennis Ritchie does not
+know exactly why an inode is called an inode.}
+https://lkml.indiana.edu/hypermail/linux/kernel/0207.2/1182.html}\cite{inode}
+by way of an inode number. An inode is a data structure internal to the file
+system that is used to keep track of metadata relating to some user data. An
+inode number is a number that uniquely identifies an inode on a particular file
+system. The consequence of this is that hard links, and therefore regular
+files, don't actually own their data; they only reference it through an inode
+number. This means that there can be multiple distinct files that reference the
+same inode, and therefore are associated with the same data.
 
 % Sample file hierarchy figure {{{
 \begin{figure}[h]
@@ -107,25 +141,60 @@ However, it is also possible to manage a file system without a GUI and use CLI
 (command line interface) tools such as \texttt{ls} or \texttt{mv}. Both GUI
 file managers and CLI tools utilise the low level interface exposed by the
 operating system and implemented by a particular file system. The traditional
-way to use this interface is via a library exposed by the operating
-system\footnote{\todo{Something about how libc is required on Windows because
-it does not have a stable syscall interface.}}. \todo{Not sure if I should stay
-abstract about a particular operating system or be specifically about
-UNIX-likes here.} On UNIX-like operating systems this library is \texttt{libc}.
-\todo{Do I need to talk about the difference between an abstract libc and
-concrete like glibc or musl?} The overwhelming majority of programs that run on
-UNIX-like operating systems use \texttt{libc} to help them interact with the
-platform. The operating systems' \texttt{libc} contains functions that require
-access to the file system (such as \texttt{stat}). To get access to the file
-system the \texttt{libc} function will execute a system call (often called a
-syscall). A system call is a way for an unprivileged user program to ask the
-operating system to perform an action on its behalf. When executed, a system
-call performs a context switch and jumps into kernel code\footnote{\todo{Not
-necessarily! See virtual syscalls and vdso on linux.}}. The kernel is the part
-of the operating system that, amongst many other functions, responds to system
-calls. When the kernel responds to a system call that requires accessing the
-file system, it must first ascertain which file system implementation to call.
-\todo{On Linux this is the VFS layer in the kernel.} Once this is determined
-the kernel asks the file system implementation to perform the action specified
-by the system call. It also may return some data to the calling user program
-via a buffer or a return value.
+way to use this interface is via the platform library exposed by the operating
+system\footnote{On some platform like Microsoft Windows, using the platform
+library is required because the system call interface is not guaranteed to be
+stable between releases.}. \todo{Not sure if I should stay abstract about a
+particular operating system or be specifically about UNIX-likes here.} On
+UNIX-like operating systems this library is \texttt{libc}\cite{libc}. \todo{Do
+I need to talk about the difference between an abstract libc and concrete like
+glibc or musl?} The overwhelming majority of programs that run on UNIX-like
+operating systems use \texttt{libc} to help them interact with the platform.
+The operating systems' \texttt{libc} contains functions that require access to
+the file system (such as \texttt{stat}\cite{stat-syscall}). To get access to
+the file system the \texttt{libc} function will execute a system
+call\cite{syscalls} (often called a syscall). A system call is a way for an
+unprivileged user program to ask the operating system to perform an action on
+its behalf. When executed, a system call performs a context switch
+\todo{Explain what a context switch actually is.} and jumps into kernel
+code\footnote{This is not strictly true, some system calls do not require jumping
+into kernel code.}.
+The kernel is the part of the operating system that, amongst many other
+functions, responds to system calls. When the kernel responds to a system call
+that requires accessing the file system, it must first ascertain which file
+system implementation is the correct one to call for this particular action.
+On Linux this is the VFS layer in the kernel\cite{kernel-vfs}. Once this is
+determined, the kernel asks the file system implementation to perform the
+action specified by the system call. It may also return some data to the
+calling user program via a buffer or a return value.
+
+\subsection{FUSE File Systems}
+
+% FUSE diagram figure {{{
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=10cm]{../data/fuse.pdf}
+    \caption[FUSE Structure]{A diagram to show the flow of data in a FUSE file
+        system. Taken from \cite{fuse-diagram-source}}
+    \label{fig:fuse diagram}
+\end{figure}
+% }}}
+
+Most file systems are built into the kernel; either directly compiled in or as
+kernel modules. This means they will run in kernel mode (ring 0 on x86
+platforms). If code running as part of the kernel crashes or hangs, there is a
+danger that this could crash or hang the entire system. Additionally, code
+running in kernel mode has the power to do anything on the system, so a
+security issue in any code run at this level code could result in a compromised
+system. To reduce the danger of writing a file system, Linux allows file
+systems to be run as userspace processes using a technology called
+FUSE\cite{kernel-fuse} (file system in userspace).
+
+\todo{Disadvantages of FUSE - slow}
+
+The in-kernel part of FUSE interfaces between the kernel and the user space
+process. The library libFUSE 
+
+\section{Technology Choices}
+\todo{Why did I choose Rust?}
+\todo{Why did I choose SQLite?}
