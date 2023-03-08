@@ -5,6 +5,8 @@ Background blah.
 
 \section{File Systems}
 
+\todo{Find reference for basic file system stuff.}
+
 The file system is a fundamental abstraction for almost all modern operating
 systems. The abstraction allows the operating system and user programs to
 interact with a variety of devices and services through a single unified
@@ -174,7 +176,7 @@ calling user program via a buffer or a return value.
 \begin{figure}[h]
     \centering
     \includegraphics[width=10cm]{../data/fuse.pdf}
-    \caption[FUSE Structure]{A diagram to show the flow of data in a FUSE file
+    \caption[FUSE Data Flow]{A diagram to show the flow of data in a FUSE file
         system. Taken from \cite{fuse-diagram-source}}
     \label{fig:fuse diagram}
 \end{figure}
@@ -192,8 +194,47 @@ FUSE\cite{kernel-fuse} (file system in userspace).
 
 \todo{Disadvantages of FUSE - slow}
 
-The in-kernel part of FUSE interfaces between the kernel and the user space
-process. The library libFUSE 
+Looking at Figure \ref{fig:fuse diagram}, there are similarities between the
+process of accessing a file system built into the kernel (in the diagram NFS
+and ext3 are used as an example) and the process of accessing a FUSE file
+system. For both built in file systems and FUSE file systems, the calling
+program uses \texttt{libc} to ask the kernel to perform a file system action,
+and the kernel dispatches the call to the correct file system implementation
+using the VFS layer. When the VFS layer requires action from a FUSE file
+system, it passes the request to the FUSE kernel module. The FUSE kernel module
+then communicates (the nature of the communication and the medium across which
+it takes place are discussed in Section \ref{mounting-fuse-fs}) the request to
+the user space process. The user space process can then do whatever it pleases
+to generate a response which is then passed back through the layers into the
+kernel and back to the calling user space program that made the request.
+
+\subsubsection{Mounting FUSE File Systems}
+\label{mounting-fuse-fs}
+
+To mount a (non-root) file system means attaching the root of a child file
+system to an empty directory in another parent file system. The two file
+systems remain entirely independent; their connection is only simulated using
+the kernel's VFS layer. However, to other programs it appears that the contents
+of the child file system are available as a sub-directory in another parent
+file system.
+
+On Linux mounting a file system is a restricted operation that can only be
+performed by the root user\cite{mount}. However, FUSE has the explicit goal of
+"allowing secure, non-privileged mounts"\cite{kernel-fuse}. To allow FUSE file
+systems to be mounted by non-privileged users, FUSE provides a mounting utility
+\texttt{fusermount} which is installed with the setuid\cite{setuid} permission
+set to the root user. A binary with this permission can be run by a normal
+user, but whilst it is running it has all the privileges of the root user. This
+allows a normal user to mount a FUSE file system.
+
+After the FUSE file system has been mounted there needs to be a channel for
+communication between the FUSE kernel module and the user space program
+managing the file system. This channel is the \texttt{/dev/fuse} pseudo device
+file. However, reading and writing to this file is a privileged action so
+\texttt{fusermount} (with its elevated permissions) is responsible for opening
+a handle to \texttt{/dev/fuse} and then returning it to the user space file
+system. \texttt{fusermount} returns this handle over a socket given to it via
+an environment variable at launch.
 
 \section{Technology Choices}
 \todo{Why did I choose Rust?}
