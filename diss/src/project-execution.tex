@@ -1,0 +1,63 @@
+\chapter{Project Execution}
+\vspace{1cm}
+
+\section{Design}
+
+\subsection{Technology Choices}
+
+Choosing suitable technology is a vital component of a successful software
+project. Unsuitable technology can result in a project being much more complex,
+brittle, and unmaintainable than it otherwise could have been. \todo{source?
+(dude just trust me)}
+
+I chose Rust as the implementation language for my project. One of the factors
+that pushed me towards Rust was my prior experience creating small hobby
+projects using the language. In these smaller past projects I had found the
+features of Rust, such as its strong static type system and focus on
+correctness, to lend themselves to producing robust and maintainable systems.
+Additionally, the potential performance of a Rust solution (due to Rust's lack
+of a runtime garbage collector) attracted me, because file system code requires
+good performance to avoid frustrating the user or slowing down other programs
+that depend on it. However, I did have some concerns about the choice of Rust.
+My main concern was, due to the fact that Rust is a relatively young
+programming language\footnote{Rust 1.0 was released in 2015
+(\url{https://blog.rust-lang.org/2015/05/15/Rust-1.0.html}) most other widely
+used programming languages were first released at least 20 years earlier.},
+there would not be many high quality libraries available. It was a pleasant
+surprise then that when browsing the Rust community repository
+crates.io\footnote{\url{https://crates.io/}}, I found many projects with active
+communities that appeared to be reasonably mature and usable. My heuristic for
+identifying these libraries is based on the number of downloads on crates.io
+and the last commit date on GitHub. I found that libraries with a high number
+of downloads tended to represent the best the community had to offer in that
+particular category. Libraries with lots of recent commits tend to have more
+active communities and that often means that there are people asking questions
+and receiving answers which is useful to fill in any gaps in the documentation.
+
+\todo{Why is Rust a suitable programming language for my project?
+Alternatives?}
+
+\subsubsection{Data Storage Back-end}
+
+Early on in the planning phase of my project I knew I was going to need some
+mechanism to persist data to the file system between mounts of the file system.
+I knew my data would be at least vaguely relational, because I knew that I
+needed to model the relationship between a file system path and the tags
+associated with it. This is what initially drew me to a database solution
+rather than a simpler flat text file. However, the main reason I chose to use
+an SQL database was the ability to constrain my data and enforce invariants at
+the database level. While it is possible to do this with a flat file approach,
+I believed that this would be difficult to implement and less performant than
+using a database.
+
+Once I had decided that I was going to use a database, my choice of which
+database implementation to use was very easy. SQLite is the most deployed
+database software on the planet \cite{sqlite-most-used}, and it is perfect for
+my use case. It is fast, battle-tested, and well documented. Unsurprisingly,
+there is a Rust wrapper library for SQLite\footnote{This highlights another
+important Rust feature: its foreign function interface (FFI)}. Rusqlite
+packages up SQLite into a more Rust-like interface suitable for use from
+entirely safe code. \todo{Make sure I have talked about the distinction between
+safe and unsafe Rust code somewhere.}
+
+\todo{Why did I choose SQLite? Alternatives? Flat File? Own Format? NoSQL? ORM?}

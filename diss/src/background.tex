@@ -192,8 +192,6 @@ system. To reduce the danger of writing a file system, Linux allows file
 systems to be run as userspace processes using a technology called
 FUSE\cite{kernel-fuse} (file system in userspace).
 
-\todo{Disadvantages of FUSE - slow}
-
 Looking at Figure \ref{fig:fuse diagram}, there are similarities between the
 process of accessing a file system built into the kernel (in the diagram NFS
 and ext3 are used as an example) and the process of accessing a FUSE file
@@ -207,6 +205,8 @@ it takes place are discussed in Section \ref{mounting-fuse-fs}) the request to
 the user space process. The user space process can then do whatever it pleases
 to generate a response which is then passed back through the layers into the
 kernel and back to the calling user space program that made the request.
+
+\todo{Disadvantages of FUSE - slow}
 
 \subsubsection{Mounting FUSE File Systems}
 \label{mounting-fuse-fs}
@@ -236,6 +236,5 @@ a handle to \texttt{/dev/fuse} and then returning it to the user space file
 system. \texttt{fusermount} returns this handle over a socket given to it via
 an environment variable at launch.
 
-\section{Technology Choices}
-\todo{Why did I choose Rust?}
-\todo{Why did I choose SQLite?}
+\todo{Talk (briefly I think) about the binary protocol fuse talks over
+\texttt{/dev/fuse}}
