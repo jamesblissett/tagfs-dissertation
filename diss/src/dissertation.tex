@@ -8,6 +8,10 @@
 
 \usepackage{indentfirst}
 \usepackage{graphicx}
+\usepackage[toc]{appendix}
+\usepackage{moreverb}
+
+\usepackage{syntax}
 
 \newcommand\todo[1]{\textcolor{red}{#1}}
 
@@ -41,5 +45,11 @@
 \backmatter
 
 \bibliography{dissertation}
+
+\begin{appendices}
+\chapter{Cargo.toml}
+\label{appendix:a}
+    \lstinputlisting{/home/james/src/tagfs-dissertation/Cargo.toml}
+\end{appendices}
 
 \end{document}

@@ -35,7 +35,7 @@ also useful in demonstrating that a file or directory can only be contained
 within one other directory. Each file or directory (excluding the root
 directory) must have one and only one parent in the hierarchy.
 
-In Figure \ref{fig:sample file hierarchy} there are two distinct files named
+In Figure~\ref{fig:sample file hierarchy} there are two distinct files named
 \texttt{timeline.txt}. It becomes ambiguous to refer to a file only by its name
 when this is the case. It is useful to use the steps taken to arrive at a file
 or directory to identify it within the file hierarchy. For example, the steps
@@ -192,7 +192,7 @@ system. To reduce the danger of writing a file system, Linux allows file
 systems to be run as userspace processes using a technology called
 FUSE\cite{kernel-fuse} (file system in userspace).
 
-Looking at Figure \ref{fig:fuse diagram}, there are similarities between the
+Looking at Figure~\ref{fig:fuse diagram}, there are similarities between the
 process of accessing a file system built into the kernel (in the diagram NFS
 and ext3 are used as an example) and the process of accessing a FUSE file
 system. For both built in file systems and FUSE file systems, the calling
@@ -201,7 +201,7 @@ and the kernel dispatches the call to the correct file system implementation
 using the VFS layer. When the VFS layer requires action from a FUSE file
 system, it passes the request to the FUSE kernel module. The FUSE kernel module
 then communicates (the nature of the communication and the medium across which
-it takes place are discussed in Section \ref{mounting-fuse-fs}) the request to
+it takes place are discussed in Section~\ref{mounting-fuse-fs}) the request to
 the user space process. The user space process can then do whatever it pleases
 to generate a response which is then passed back through the layers into the
 kernel and back to the calling user space program that made the request.
@@ -238,3 +238,5 @@ an environment variable at launch.
 
 \todo{Talk (briefly I think) about the binary protocol fuse talks over
 \texttt{/dev/fuse}}
+
+\section{The Rust Programming Language}

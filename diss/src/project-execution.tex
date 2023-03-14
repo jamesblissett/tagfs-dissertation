@@ -1,6 +1,15 @@
 \chapter{Project Execution}
 \vspace{1cm}
 
+\todo{Say what my project actually is.}
+My project is a tag-based FUSE file system (from now on creatively referred to
+as "tagfs"). Tagfs is written in the Rust programming language and relies on
+the "fuser" library to communicate with and decode messages from the FUSE
+kernel module. Tagfs also makes use of the SQLite database library through the
+Rust wrapper interface provided by "rusqlite". Specific features of tagfs are
+discussed in more detail in Section \ref{section:features}. \todo{This feels
+like maybe it should be part of the introduction?}
+
 \section{Design}
 
 \subsection{Technology Choices}
@@ -35,7 +44,7 @@ active communities and that often means that there are people asking questions
 and receiving answers which is useful to fill in any gaps in the documentation.
 
 \todo{Why is Rust a suitable programming language for my project?
-Alternatives?}
+Alternatives? Why Rust not C?}
 
 \subsubsection{Data Storage Back-end}
 
@@ -53,11 +62,205 @@ using a database.
 Once I had decided that I was going to use a database, my choice of which
 database implementation to use was very easy. SQLite is the most deployed
 database software on the planet \cite{sqlite-most-used}, and it is perfect for
-my use case. It is fast, battle-tested, and well documented. Unsurprisingly,
-there is a Rust wrapper library for SQLite\footnote{This highlights another
-important Rust feature: its foreign function interface (FFI)}. Rusqlite
-packages up SQLite into a more Rust-like interface suitable for use from
-entirely safe code. \todo{Make sure I have talked about the distinction between
-safe and unsafe Rust code somewhere.}
+my use case of a local data store. It is fast, battle-tested, and well
+documented. Unsurprisingly, there is a Rust wrapper library for
+SQLite\footnote{This highlights another important Rust feature: its foreign
+function interface (FFI)}. Rusqlite packages up SQLite into a more Rust-like
+interface suitable for use from entirely safe code. \todo{Make sure I have
+talked about the distinction between safe and unsafe Rust code somewhere.}
 
 \todo{Why did I choose SQLite? Alternatives? Flat File? Own Format? NoSQL? ORM?}
+
+\subsection{Database Schema Design}
+\todo{Not sure how much I can squeeze out of this tbh.}
+
+\section{Features}
+\label{section:features}
+
+Tagfs exposes two different interfaces for the user to interact with: a CLI and
+a file system interface. The CLI uses both the classic UNIX style options
+(\texttt{--help} or \texttt{--database}) and a more modern (at least as far as
+CLIs go) subcommand style interface similar to the \texttt{git} CLI.
+
+% tagfs CLI {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+$ tagfs help
+Tag-based virtual file system backed by SQLite.
+
+Usage: tagfs [OPTIONS] <COMMAND>
+
+Commands:
+tag             Apply a tag to a path
+untag           Remove a tag from a path
+mount           Mount the filesystem [aliases: mnt, m]
+tags            Display tags associated with a path
+query           Query the database [aliases: q, search]
+autotag         Autotag a directory tree or file
+prefix          Modify the prefix of paths in the database
+edit            Edit the tags database using a text editor
+stored-queries  List, create and delete stored queries in the database
+help            Print this message or the help of the given subcommand(s)
+
+Options:
+    --database <database>  Path to database to use or create
+-h, --help                 Print help
+-V, --version              Print version
+    \end{boxedverbatim}
+    \caption{Help for tagfs. Shown when the \texttt{tagfs} or \texttt{tagfs
+    help} command is run. \todo{MAKE SURE TO KEEP THIS UPDATED.}}
+    \label{fig:root-cli}
+\end{figure}
+%stopzone stops vim syntax highlighting running over.
+% }}}
+
+Each subcommand acts as if it is its own self contained program with its own
+options and arguments. However, there are some options that all of the
+subcommands share, these can been seen at the bottom of
+Figure~\ref{fig:root-cli}. The \texttt{--database} option specifies the SQLite
+database to use for a specific subcommand. If this option is given, but the
+database does not exist at the given location then a new database is created at
+the specified location. If this option is not given at all then, following the
+XDG base directory specification \cite{xdg-base-dir-spec}, a sensible default
+location is found. If a database is found at this location then it is used, but
+if there is no database then an empty one is created.
+
+The \texttt{tag} and \texttt{untag} subcommands are both straightforward CRUD
+actions in the database, create and delete respectively. Both subcommands take
+a path and a list of tags. The \texttt{tag} subcommand tags the given path with
+each tag in turn. The \texttt{untag} subcommand removes each given tag from the
+given path. If the list of tags given is empty then \texttt{untag} removes all
+tags from the given path.
+
+The \texttt{mount} subcommand mounts the FUSE file system at the given mount
+point. The FUSE file system is discussed in more detail in
+Section~\ref{sec:fs-features}.
+
+The \texttt{tags} subcommand lists all of the tags stored on a given path. The
+information provided by this command is also exposed through the FUSE file
+system. The situation is similar for the \texttt{query} subcommand. The
+subcommand takes a query and lists all of the paths that match. Queries are
+discussed in more detail in Section~\ref{sec:queries}.
+
+The \texttt{autotag} subcommand takes a path. If the path is a directory then
+the subcommand will recursively search the directory for all its descendants
+that are files. Each of these files is checked to see if they are of a type
+that the \texttt{autotag} subcommand recognises. If \texttt{autotag} recognises
+a file's type then it will attempt to extract or generate tags based on the
+file's content. For example, if \texttt{autotag} comes across an MP3 file it
+will try and extract the file's metadata tags and build tags based on them.
+\todo{Show example.} The software also recognises image files and can extract
+metadata from these also. \todo{Talk about recognising film files.}
+
+The \texttt{prefix} subcommand is used for searching and replacing components
+of the paths stored in the database. It takes two strings as arguments: the
+term to search for and the term to replace it with. It then scans the database
+for any paths matching the search term and replaces the match with the given
+replacement text. This subcommand is designed to reduce the burden of updating
+the database after you have moved some files. For example, you might have moved
+your music directory to another location on your system, and using the prefix
+command you can update all of the paths for your music files to use the new
+location in one go.
+
+The \texttt{edit} subcommand is used to make fine-grained edits to the database
+with the comfort of a familiar interface. This subcommand dumps the contents of
+the database to a temporary file in a human-readable format. Then the
+subcommand invokes the user's preferred editor\footnote{It finds the user's
+preferred editor by first reading the \texttt{\$VISUAL} environment variable and
+failing that it tries the \texttt{\$EDITOR} environment variable before falling
+back to a default value.} on the temporary file and waits for the editor
+process to terminate. Once the editing session is complete, the \texttt{edit}
+subcommand checks to see if the user has made any changes to the temporary
+file and, if they have, commits them to the database. \todo{Figure with edit
+subcommand format.} \todo{In Figure~\ref{fig:edit-subcommand-format}...}
+
+% edit subcommand format figure {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+
+
+--------
+/path/to/tagged/file
+tag1=value
+tag2
+tag3=long\ value
+--AUTO--
+autotag=autovalue
+--------
+
+--------
+/path/to/another/tagged/file
+tag1=other-value
+tag2
+--AUTO--
+another-autotag=autovalue
+--------
+    \end{boxedverbatim}
+    \label{fig:edit-subcommand-format}
+    \caption{Example of the \texttt{edit} subcommand editing session.}
+\end{figure}
+% }}}
+
+\subsection{Queries}
+\label{sec:queries}
+
+Whilst using tagfs there are multiple contexts in which the user may be asked
+for a query.
+
+\subsubsection{Query Syntax}
+\label{sec:query-syntax}
+
+% NOT SURE THIS IS WORTH THE INVESTMENT.
+% query grammar {{{
+% \todo{Make sure this is correct!}
+% \begin{grammar}
+%     <query> ::= <term> <binary-bool-op> <query>
+%     \alt <unary-bool-op> <query>
+%     \alt <term>
+%     \alt `(' <query> `)'
+
+%     <term> ::= <tag> <comp-op> <value> \alt <tag>
+
+%     <tag> ::= <tag-char> <tag> | <tag-char>
+
+%     <tag-char> ::= \{ Set of non-whitespace, non-control Unicode characters. \}
+%         $\setminus$ \{ `=', `<', `>', `(', `)' \}
+
+%     <value> ::= `"' <value-quoted> `"' | <value-unquoted>
+
+%     <value-quoted> ::= <value-char-quoted> <value-quoted>
+%         \alt `\\"' <value-quoted>
+%         \alt <value-char-quoted>
+
+%     <value-char-quoted> ::= \{ Set of non-control Unicode characters \}
+%         $\setminus$ \{ `"' \}
+
+%     <value-unquoted> ::= <value-char-unquoted> <value-unquoted>
+%         \alt `\\ ' <value-unquoted>
+
+%     <value-char-unquoted> ::= \{ Set of non-control Unicode characters. \}
+%         $\setminus$ \{ `)', ` ' \}
+
+%     <comp-op> ::= `>' | `<' | `=' | `=='
+
+%     <binary-bool-op> ::= `and' | `or'
+
+%     <unary-bool-op> ::= `not'
+
+%     <whitespace> ::= ` ' | <whitespace> ` '
+
+%     <maybe-whitespace> ::= <whitespace> | $\epsilon$
+% \end{grammar}
+% }}}
+
+\subsection{File System Features}
+\label{sec:fs-features}
+
+\section{Implementation}
+\todo{Talk about order of development, e.g. making empty fs first etc...}
+
+\subsection{Software Development Practices}
+
+\subsection{Testing}
