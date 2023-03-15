@@ -86,42 +86,37 @@ same inode, and therefore are associated with the same data.
 % Sample file hierarchy figure {{{
 \begin{figure}[h]
 \centering
-\begin{tikzpicture}[node distance=0.5cm]
-    \tikzset{file/.style={rectangle, rounded corners, text=olive, text
-        width=1cm, font=\ttfamily}}
-    \tikzset{directory/.style={rectangle, rounded corners, text=teal, text
-        width=1cm, font=\ttfamily}}
-    \tikzset{root directory/.style={rectangle, rounded corners, text=teal,
-        font=\ttfamily}}
-    \tikzset{arrow/.style=thick}
-
-    \node (root) [root directory] {/};
-    \node (code) [directory, below of=root, xshift=1cm] {code};
-    \node (mainc) [file, below of=code, xshift=1cm] {main.c};
-    \node (makefile) [file, below of=mainc] {Makefile};
-    \node (documents) [directory, below of=makefile, xshift=-1cm] {documents};
-    \node (project1) [directory, below of=documents, xshift=1cm] {project1};
-    \node (timeline1) [file, below of=project1, xshift=1cm] {timeline.txt};
-    \node (project2) [directory, below of=timeline1, xshift=-1cm] {project2};
-    \node (timeline2) [file, below of=project2, xshift=1cm] {timeline.txt};
-    \node (projectstxt) [file, below of=timeline2, xshift=-1cm] {projects.txt};
-    \node (images) [directory, below of=projectstxt, xshift=-1cm] {images};
-    \node (scanjpg) [file, below of=images, xshift=1cm] {scan.jpg};
-
-    \draw [arrow] (root) |- (code);
-    \draw [arrow] (code) |- (mainc);
-    \draw [arrow] (code) |- (makefile);
-    \draw [arrow] (root) |- (documents);
-    \draw [arrow] (documents) |- (project1);
-    \draw [arrow] (project1) |- (timeline1);
-    \draw [arrow] (documents) |- (project2);
-    \draw [arrow] (project2) |- (timeline2);
-    \draw [arrow] (documents) |- (projectstxt);
-    \draw [arrow] (root) |- (images);
-    \draw [arrow] (images) |- (scanjpg);
-\end{tikzpicture}
-\caption[Sample file hierarchy]{Sample file hierarchy with directories in blue
-    and files in green.}
+\begin{forest}
+    for tree = {%
+        folder,
+        grow'=0,
+        fit=band,
+        font=\ttfamily,
+        s sep=0.5mm,
+        l sep=0.7cm,
+    }
+    [/,color=teal
+        [code,color=teal
+            [main.c,color=olive]
+            [Makefile,color=olive]
+        ]
+        [documents,color=teal
+            [project1,color=teal
+                [timeline.txt,color=olive]
+            ]
+            [project2,color=teal
+                [timeline.txt,color=olive]
+            ]
+            [projects.txt,color=olive]
+        ]
+        [images,color=teal
+            [scan.jpg,color=olive]
+        ]
+    ]
+\end{forest}
+\caption[Sample file hierarchy]{Sample file hierarchy with directories in
+    \textcolor{teal}{blue}
+    and files in \textcolor{olive}{green}.}
 \label{fig:sample file hierarchy}
 \end{figure}
 % }}}

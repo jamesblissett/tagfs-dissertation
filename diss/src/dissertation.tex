@@ -1,5 +1,5 @@
 \documentclass[oneside, author={James Blissett}, degree={BSc},
-    title={Tag Based Filesystem},
+    title={Development of a Tag Based FUSE Filesystem},
     subtitle={}]{../lib/dissertation}
 
 % \usepackage[rgb]{xcolor}
@@ -11,9 +11,15 @@
 \usepackage[toc]{appendix}
 \usepackage{moreverb}
 
+\usepackage[edges]{forest}
+
 \usepackage{syntax}
 
 \newcommand\todo[1]{\textcolor{red}{#1}}
+
+\newcommand\file[1]{\texttt{\textcolor{olive}{#1}}}
+\newcommand\symlink[1]{\texttt{\textcolor{purple}{#1}}}
+\newcommand\dir[1]{\texttt{\textcolor{teal}{#1}}}
 
 \setcounter{secnumdepth}{3}
 
@@ -41,6 +47,7 @@
 \include{introduction}
 \include{background}
 \include{project-execution}
+\include{evaluation}
 
 \backmatter
 
