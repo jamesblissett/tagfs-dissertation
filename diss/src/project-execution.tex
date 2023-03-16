@@ -279,6 +279,9 @@ for a query.
 \subsection{File System Features}
 \label{sec:fs-features}
 
+\todo{Mention that the file system updates automatically and never needs to
+remount.}
+
 Once the file system has been mounted using the \texttt{tagfs mount} subcommand
 it can be interacted with as if it were any other file system on the system.
 Figure~\ref{fig:sample-tagfs-tree} shows a possible hierarchy for the FUSE file
@@ -304,7 +307,28 @@ easy to access method of performing simple queries of the database for a single
 tag. However, it is desirable to be able to perform more advanced queries from
 the file system.
 
-This is where the query directory (\dir{?/}) is useful. \todo{keep it going.}
+This is where the query directory (\dir{?/}) is useful. The query directory
+contains sub-directories representing each of the stored queries saved by the
+\texttt{stored-queries} subcommand. The stored query directories are named with
+the format \texttt{<query-name> @ [<query>]}. Each stored query directory
+contains the results of executing the stored query the directory represents. In
+Figure~\ref{fig:sample-tagfs-tree} the stored query directory is named
+\texttt{favourite-crime} and contains the results of executing the
+\texttt{type=film and genre=crime and favourite} query, which in this example
+is one path represented by the symbolic link \symlink{Heat (1995)}. Stored
+queries are useful for saving frequently used queries, but it would be very
+restricting to only be able to access the results of queries previously stored
+in the system. To make running one-off queries less tedious, the query
+directory also supports running arbitrary queries by looking up
+`hidden' directories\footnote{These directories are not actually hidden, rather
+they do not actually exist until they are looked up.}. These directories are
+children of the query directory (\dir{?/}) named after the query they
+represent. Using the tags established in Figure~\ref{fig:sample-tagfs-tree} as
+an example, looking up the directory \dir{?/genre=rock/} would result in a
+directory containing the results of the \texttt{genre=rock} query, which in
+this case would be a symbolic link named \symlink{01 Cherub Rock.flac} pointing
+to the target \file{/music/The Smashing Pumpkins/Siamese Dream/01 Cherub
+Rock.flac}. This is illustrated in Figure~\ref{fig:sample-tagfs-query-dir}.
 
 % Sample tagfs FUSE file hierarchy figure {{{
 \begin{figure}[h]
@@ -389,6 +413,66 @@ shows the target that the link is referring to.}
 \label{fig:sample-tagfs-tree}
 \end{figure}
 % }}}
+
+% Arbitrary query tagfs FUSE file hierarchy figure {{{
+\begin{figure}[h]
+\centering
+\begin{forest}
+    for tree = {%
+        folder,
+        grow'=0,
+        fit=band,
+        font=\ttfamily,
+        s sep=0.0mm,
+    }
+    [fuse-mount-root/?/{genre=rock},color=teal
+        [\textcolor{purple}{01 Cherub Rock.flac} ->
+            \textcolor{olive}{/music/The Smashing Pumpkins/Siamese
+            Dream/01 Cherub
+            Rock.flac}]
+        [...]
+    ]
+\end{forest}
+\caption[Sample result of looking up an arbitrary query directory.]
+{Result of looking up an arbitrary query directory with directories in
+\textcolor{teal}{blue}, files in \textcolor{olive}{green}, and symbolic links
+in \textcolor{purple}{pink}. An arrow (`\texttt{->}') following a symbolic link
+shows the target that the link is referring to.}
+\label{fig:sample-tagfs-query-dir}
+\end{figure}
+% }}}
+
+% sample contents of a .tags file {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+
+
+favourite
+genre=crime
+type=film
+year=1995
+    \end{boxedverbatim}
+    \caption[Example contents of a \texttt{.tags} file]{Contents of the file
+        \file{fuse-mount-root/tags/film/Heat (1995).tags} from
+        Figure~\ref{fig:sample-tagfs-tree}}
+    \label{fig:tagfs-all-tags-example}
+\end{figure}
+% }}}
+
+The file system also exposes another special directory: the \dir{tags}
+directory. The \dir{tags} directory provides a method of viewing all of the
+tags associated with a particular path. Under the \dir{tags} directory a
+structure mirroring the hierarchy of all the paths in the system is created.
+Browsing this structure is just like browsing the normal file system hierarchy
+outside of \texttt{tagfs}. However, the last component of the path is replaced
+by a file that has the same name as the last component of the path with an
+extra \texttt{.tags} extension. An example of this hierarchy can be seen in
+Figure~\ref{fig:sample-tagfs-tree}. Inside each of these \texttt{.tags} files
+is a list of all the tags on the path represented by the file. For example,
+the file \file{fuse-mount-root/tags/film/Heat (1995).tags} contains a list of
+all the tags on the path \texttt{/film/Heat (1995)}. The particular tags for
+this example are shown in Figure~\ref{fig:tagfs-all-tags-example}.
 
 \section{Implementation}
 \todo{Talk about order of development, e.g. making empty fs first etc...}
