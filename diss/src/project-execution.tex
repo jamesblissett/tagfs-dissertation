@@ -228,59 +228,82 @@ the path entirely.
 \label{sec:queries}
 
 Whilst using tagfs there are multiple contexts in which the user may be asked
-for a query.
+for a query. These are when using the FUSE file system and when using the
+\texttt{query} subcommand. A query is an expression which any particular path
+in the database either satisfies or does not satisfy.
 
-\subsubsection{Query Syntax}
-\label{sec:query-syntax}
+At the most basic level, a query can contain a single tag, for example
+\texttt{favourite}. This query matches all the paths in the database that have
+been tagged with the tag ``favourite''. This is useful on its own, but not very
+powerful. However, it is possible to combine multiple tags into a single query
+with boolean operators. One such operator is the ``and'' operator. It matches a
+path if both its operands match. For example, the query \texttt{favourite and
+watched} matches all the paths tagged with both ``favourite'' and ``watched''.
+Additionally, there is a union operator ``or'' that matches a path if either or
+both of its operands match. A query can also be inverted by using the ``not''
+operator. For example, the query \texttt{not favourite} matches all paths in
+the database that are not tagged with ``favourite''. These operators can be
+combined in many ways to produce arbitrary expressions. For example, the
+query \texttt{not favourite and (not watched or recent)} matches any paths that
+do not have the ``favourite'' tag and have the ``recent'' tag or don't have the
+``watched'' tag. In the previous query parentheses are used to group parts of
+the expression differently than without. Query expressions follow the
+conventional precedence rules that specify that parentheses have the highest
+precedence, followed by ``not'', followed by ``and'', followed by ``or''.
 
-% NOT SURE THIS IS WORTH THE INVESTMENT.
 % query grammar {{{
-% \todo{Make sure this is correct!}
-% \begin{grammar}
-%     <query> ::= <term> <binary-bool-op> <query>
-%     \alt <unary-bool-op> <query>
-%     \alt <term>
-%     \alt `(' <query> `)'
+\begin{figure}[h]
+\begin{grammar}
+<query> ::= <term> <whitespace> <binary-bool-op> <whitespace> <query>
+    \alt <unary-bool-op> <whitespace> <query>
+    \alt `(' <maybe-whitespace> <query> <maybe-whitespace> `)'
+    \alt <term>
 
-%     <term> ::= <tag> <comp-op> <value> \alt <tag>
+<term> ::= <tag> <maybe-whitespace> <comp-op> <maybe-whitespace> <value>
+    \alt <tag>
 
-%     <tag> ::= <tag-char> <tag> | <tag-char>
+<tag> ::= <tag-char> <tag> | <tag-char>
 
-%     <tag-char> ::= \{ Set of non-whitespace, non-control Unicode characters. \}
-%         $\setminus$ \{ `=', `<', `>', `(', `)' \}
+<tag-char> ::= \{Set of non-whitespace, non-control Unicode characters\}
+    $\setminus$ \{`=', `<', `>', `(', `)'\}
 
-%     <value> ::= `"' <value-quoted> `"' | <value-unquoted>
+<value> ::= `"' <value-quoted> `"' | <value-unquoted>
 
-%     <value-quoted> ::= <value-char-quoted> <value-quoted>
-%         \alt `\\"' <value-quoted>
-%         \alt <value-char-quoted>
+<value-quoted> ::= <value-char-quoted> <value-quoted>
+    | <value-char-quoted>
 
-%     <value-char-quoted> ::= \{ Set of non-control Unicode characters \}
-%         $\setminus$ \{ `"' \}
+    <value-char-quoted> ::= \{`\\"'\} $\cup$ \{Set of non-control Unicode
+        characters\} $\setminus$ \{`"'\}
 
-%     <value-unquoted> ::= <value-char-unquoted> <value-unquoted>
-%         \alt `\\ ' <value-unquoted>
+<value-unquoted> ::= <value-char-unquoted> <value-unquoted>
+    | <value-char-unquoted>
 
-%     <value-char-unquoted> ::= \{ Set of non-control Unicode characters. \}
-%         $\setminus$ \{ `)', ` ' \}
+<value-char-unquoted> ::= \{ `\\ ', `\\"', `\\)' \} $\cup$ \{Set of
+    non-whitespace, non-control Unicode characters\} $\setminus$ \{`)', `"'\}
 
-%     <comp-op> ::= `>' | `<' | `=' | `=='
+<comp-op> ::= `>' | `<' | `=' | `=='
 
-%     <binary-bool-op> ::= `and' | `or'
+<binary-bool-op> ::= `and' | `or'
 
-%     <unary-bool-op> ::= `not'
+<unary-bool-op> ::= `not'
 
-%     <whitespace> ::= ` ' | <whitespace> ` '
+<whitespace> ::= ` ' <whitespace> | ` '
 
-%     <maybe-whitespace> ::= <whitespace> | $\epsilon$
-% \end{grammar}
+<maybe-whitespace> ::= <whitespace> | $\epsilon$
+
+\end{grammar}
+\label{fig:query-bnf}
+\caption[BNF description of the query language of \texttt{tagfs}]
+    {BNF description of the query language of \texttt{tagfs}. Note that set
+    notation is used as a shorthand to describe production rules with many
+    terminals. For example the set $\{a, b, c\}$ produces the rule $a \vert b
+    \vert c$. \todo{note that tags cannot have the same name as boolean
+    operators}}
+\end{figure}
 % }}}
 
 \subsection{File System Features}
 \label{sec:fs-features}
-
-\todo{Mention that the file system updates automatically and never needs to
-remount.}
 
 Once the file system has been mounted using the \texttt{tagfs mount} subcommand
 it can be interacted with as if it were any other file system on the system.
@@ -331,7 +354,7 @@ to the target \file{/music/The Smashing Pumpkins/Siamese Dream/01 Cherub
 Rock.flac}. This is illustrated in Figure~\ref{fig:sample-tagfs-query-dir}.
 
 % Sample tagfs FUSE file hierarchy figure {{{
-\begin{figure}[h]
+\begin{figure}
 \centering
 \begin{forest}
     for tree = {%
@@ -415,7 +438,7 @@ shows the target that the link is referring to.}
 % }}}
 
 % Arbitrary query tagfs FUSE file hierarchy figure {{{
-\begin{figure}[h]
+\begin{figure}
 \centering
 \begin{forest}
     for tree = {%
@@ -443,7 +466,7 @@ shows the target that the link is referring to.}
 % }}}
 
 % sample contents of a .tags file {{{
-\begin{figure}[h]
+\begin{figure}
     \centering
     \begin{boxedverbatim}
 
@@ -473,6 +496,11 @@ is a list of all the tags on the path represented by the file. For example,
 the file \file{fuse-mount-root/tags/film/Heat (1995).tags} contains a list of
 all the tags on the path \texttt{/film/Heat (1995)}. The particular tags for
 this example are shown in Figure~\ref{fig:tagfs-all-tags-example}.
+
+The file system is also able to handle modifications to the database whilst it
+is mounted. This means that whenever the database is modified, the file system
+will adjust to the new database state seamlessly. As such, mounting and
+remounting the file system to handle changes is completely unnecessary.
 
 \section{Implementation}
 \todo{Talk about order of development, e.g. making empty fs first etc...}
