@@ -548,3 +548,56 @@ remounting the file system to handle changes is completely unnecessary.
 \todo{Talk about use of cargo doc.}
 
 \subsection{Testing}
+
+\todo{Talk about cargo test, and difference between integration and unit
+    tests. Talk about TDD for the lexer.}
+
+Whilst implementing \texttt{tagfs} I made sure to test the project's
+functionality frequently, both manually and automatically. Manual testing is
+initially important to check that a feature seems to work as expected, but
+automated testing provides confidence that a feature is working and stays
+working throughout changes to the project. To facilitate the creation and
+running of tests I followed the standard testing methodology for Rust projects
+specified in the Rust book \cite{rust-testing}. This includes the usage of both
+unit and integration tests. I used unit tests to isolate and test specific
+functions within my project. An example of this is the \verb@sanitise_path@
+function that is used to ensure that no two files in the same directory are
+given the same file name. Additionally, I found that test driven development
+(TDD) was an appropriate and useful technique for developing the lexer
+component of the query subsystem. Writing the tests before the implementation
+ensured that I had a good grasp of what the lexer needed to achieve and helped
+me to foresee tricky cases that the lexer would need to handle.
+Figure~\ref{fig:example-unit-test} is a code snippet from one of the tests in
+my project. It uses the \texttt{assert_eq!} macro to test equality between its
+arguments and to provide a useful error message if the test fails. These tests
+were particularly useful when it came to adding the \texttt{==} operator at a
+later date to the initial implementation of the query subsystem. It ensured
+that the addition of a new operator did not break the existing functionality,
+which reduced the fear associated with modifying already working code.
+
+% example lex_query test {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+assert_eq!(
+    super::lex_query("      (     not nothello   = \"(wor\\\"=ld)\""),
+    &[
+        LeftParen, Not, Tag(String::from("nothello")), Equals,
+        Value(String::from("(wor\"=ld)"))
+    ]
+);
+    \end{boxedverbatim}
+    \caption[Example unit test]{Example unit test for testing the lexer
+        functionality of the query subsystem.}
+    \label{fig:example-unit-test}
+\end{figure}
+% }}}
+
+I used integration testing to test the public API of the library component of
+\texttt{tagfs}. This is the API that both the command line interface and the
+FUSE file system use to operate the tag database. In Rust, integration tests
+are entirely separate crates\footnote{``Crate'' is the Rust specific term for
+compilation unit.}, so by design they cannot access anything that normal
+consumers of the library cannot.
+
+\todo{Full system testing of filesystem. Custom macros}
