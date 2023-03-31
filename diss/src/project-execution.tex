@@ -13,6 +13,8 @@ like maybe it should be part of the introduction?}
 
 \section{Design}
 
+\todo{Talk about who would use the software i.e. power users etc.}
+
 \subsection{Technology Choices}
 
 Choosing suitable technology is a vital component of a successful software
@@ -228,6 +230,57 @@ the path entirely.
 \subsection{Queries}
 \label{sec:queries}
 
+% query grammar {{{
+\begin{figure}[t]
+\begin{grammar}
+<query> ::= <term> <whitespace> <binary-bool-op> <whitespace> <query>
+    \alt <unary-bool-op> <whitespace> <query>
+    \alt `(' <maybe-whitespace> <query> <maybe-whitespace> `)'
+    \alt <term>
+
+<term> ::= <tag> <maybe-whitespace> <comp-op> <maybe-whitespace> <value>
+    \alt <tag>
+
+<tag> ::= <tag-char> <tag> | <tag-char>
+
+<tag-char> ::= \{Set of non-whitespace, non-control Unicode characters\}
+    $\setminus$ \{`=', `<', `>', `(', `)'\}
+
+<value> ::= `"' <value-quoted> `"' | <value-unquoted>
+
+<value-quoted> ::= <value-char-quoted> <value-quoted>
+    | <value-char-quoted>
+
+    <value-char-quoted> ::= \{`\\"'\} $\cup$ \{Set of non-control Unicode
+        characters\} $\setminus$ \{`"'\}
+
+<value-unquoted> ::= <value-char-unquoted> <value-unquoted>
+    | <value-char-unquoted>
+
+<value-char-unquoted> ::= \{ `\\ ', `\\"', `\\)' \} $\cup$ \{Set of
+    non-whitespace, non-control Unicode characters\} $\setminus$ \{`)', `"'\}
+
+<comp-op> ::= `>' | `<' | `=' | `=='
+
+<binary-bool-op> ::= `and' | `or'
+
+<unary-bool-op> ::= `not'
+
+<whitespace> ::= ` ' <whitespace> | ` '
+
+<maybe-whitespace> ::= <whitespace> | $\epsilon$
+
+\end{grammar}
+\label{fig:query-bnf}
+\caption[BNF description of the query language of \texttt{tagfs}]
+    {BNF description of the query language of \texttt{tagfs}. Note that set
+    notation is used as a shorthand to describe production rules with many
+    terminals. For example the set $\{a, b, c\}$ produces the rule $a \vert b
+    \vert c$. \todo{note that tags cannot have the same name as boolean
+    operators}}
+\end{figure}
+% }}}
+
 Whilst using tagfs there are multiple contexts in which the user may be asked
 for a query. These are when using the FUSE file system and when using the
 \texttt{query} subcommand. A query is an expression which any particular path
@@ -286,110 +339,11 @@ and both have the same meaning.
 The query syntax is specified more precisely in Figure~\ref{fig:query-bnf}
 using BNF notation.
 
-% query grammar {{{
-\begin{figure}[h]
-\begin{grammar}
-<query> ::= <term> <whitespace> <binary-bool-op> <whitespace> <query>
-    \alt <unary-bool-op> <whitespace> <query>
-    \alt `(' <maybe-whitespace> <query> <maybe-whitespace> `)'
-    \alt <term>
-
-<term> ::= <tag> <maybe-whitespace> <comp-op> <maybe-whitespace> <value>
-    \alt <tag>
-
-<tag> ::= <tag-char> <tag> | <tag-char>
-
-<tag-char> ::= \{Set of non-whitespace, non-control Unicode characters\}
-    $\setminus$ \{`=', `<', `>', `(', `)'\}
-
-<value> ::= `"' <value-quoted> `"' | <value-unquoted>
-
-<value-quoted> ::= <value-char-quoted> <value-quoted>
-    | <value-char-quoted>
-
-    <value-char-quoted> ::= \{`\\"'\} $\cup$ \{Set of non-control Unicode
-        characters\} $\setminus$ \{`"'\}
-
-<value-unquoted> ::= <value-char-unquoted> <value-unquoted>
-    | <value-char-unquoted>
-
-<value-char-unquoted> ::= \{ `\\ ', `\\"', `\\)' \} $\cup$ \{Set of
-    non-whitespace, non-control Unicode characters\} $\setminus$ \{`)', `"'\}
-
-<comp-op> ::= `>' | `<' | `=' | `=='
-
-<binary-bool-op> ::= `and' | `or'
-
-<unary-bool-op> ::= `not'
-
-<whitespace> ::= ` ' <whitespace> | ` '
-
-<maybe-whitespace> ::= <whitespace> | $\epsilon$
-
-\end{grammar}
-\label{fig:query-bnf}
-\caption[BNF description of the query language of \texttt{tagfs}]
-    {BNF description of the query language of \texttt{tagfs}. Note that set
-    notation is used as a shorthand to describe production rules with many
-    terminals. For example the set $\{a, b, c\}$ produces the rule $a \vert b
-    \vert c$. \todo{note that tags cannot have the same name as boolean
-    operators}}
-\end{figure}
-% }}}
-
 \subsection{File System Features}
 \label{sec:fs-features}
 
-Once the file system has been mounted using the \texttt{tagfs mount} subcommand
-it can be interacted with as if it were any other file system on the system.
-Figure~\ref{fig:sample-tagfs-tree} shows a possible hierarchy for the FUSE file
-system. Within the root directory (in Figure~\ref{fig:sample-tagfs-tree} this
-is \texttt{\textcolor{teal}{fuse-mount-root/}}) a directory is created for each
-tag in the database. In Figure~\ref{fig:sample-tagfs-tree} these tag
-directories are \dir{favourite}, \dir{genre}, \dir{type} and \dir{year}. Each
-tag directory has different children based on whether the tag is associated
-with a value or not. If a tag does not have an associated value (this is the
-case for the \dir{favourite} tag directory in
-Figure~\ref{fig:sample-tagfs-tree}) then the corresponding tag directory will
-contain a symbolic link for each path that shares the tag. Each symbolic link
-points to the tagged path and shares the same name as the last component of the
-tagged path. An example of one of these symbolic links is \symlink{Heat (1995)}
-in the \dir{favourite} directory. Alternatively, if a tag is associated with a
-value then the children of the tag directory are the enumerated values
-associated with that tag. An example of this type of tag directory is
-\dir{genre} with two associated values represented by the value directories
-\dir{crime} and \dir{rock}. Each of these value directories contains symbolic
-links to the paths that are tagged with the tag of the parent tag directory and
-the value of the value directory. These two types of directories provide an
-easy to access method of performing simple queries of the database for a single
-tag. However, it is desirable to be able to perform more advanced queries from
-the file system.
-
-This is where the query directory (\dir{?/}) is useful. The query directory
-contains sub-directories representing each of the stored queries saved by the
-\texttt{stored-queries} subcommand. The stored query directories are named with
-the format \texttt{<query-name> @ [<query>]}. Each stored query directory
-contains the results of executing the stored query the directory represents. In
-Figure~\ref{fig:sample-tagfs-tree} the stored query directory is named
-\texttt{favourite-crime} and contains the results of executing the
-\texttt{type=film and genre=crime and favourite} query, which in this example
-is one path represented by the symbolic link \symlink{Heat (1995)}. Stored
-queries are useful for saving frequently used queries, but it would be very
-restricting to only be able to access the results of queries previously stored
-in the system. To make running one-off queries less tedious, the query
-directory also supports running arbitrary queries by looking up
-`hidden' directories\footnote{These directories are not actually hidden, rather
-they do not actually exist until they are looked up.}. These directories are
-children of the query directory (\dir{?/}) named after the query they
-represent. Using the tags established in Figure~\ref{fig:sample-tagfs-tree} as
-an example, looking up the directory \dir{?/genre=rock/} would result in a
-directory containing the results of the \texttt{genre=rock} query, which in
-this case would be a symbolic link named \symlink{01 Cherub Rock.flac} pointing
-to the target \file{/music/The Smashing Pumpkins/Siamese Dream/01 Cherub
-Rock.flac}. This is illustrated in Figure~\ref{fig:sample-tagfs-query-dir}.
-
 % Sample tagfs FUSE file hierarchy figure {{{
-\begin{figure}
+\begin{figure}[p]
 \centering
 \begin{forest}
     for tree = {%
@@ -473,7 +427,7 @@ shows the target that the link is referring to.}
 % }}}
 
 % Arbitrary query tagfs FUSE file hierarchy figure {{{
-\begin{figure}
+\begin{figure}[p]
 \centering
 \begin{forest}
     for tree = {%
@@ -501,7 +455,7 @@ shows the target that the link is referring to.}
 % }}}
 
 % sample contents of a .tags file {{{
-\begin{figure}
+\begin{figure}[p]
     \centering
     \begin{boxedverbatim}
 
@@ -517,6 +471,54 @@ year=1995
     \label{fig:tagfs-all-tags-example}
 \end{figure}
 % }}}
+
+Once the file system has been mounted using the \texttt{tagfs mount} subcommand
+it can be interacted with as if it were any other file system on the system.
+Figure~\ref{fig:sample-tagfs-tree} shows a possible hierarchy for the FUSE file
+system. Within the root directory (in Figure~\ref{fig:sample-tagfs-tree} this
+is \texttt{\textcolor{teal}{fuse-mount-root/}}) a directory is created for each
+tag in the database. In Figure~\ref{fig:sample-tagfs-tree} these tag
+directories are \dir{favourite}, \dir{genre}, \dir{type} and \dir{year}. Each
+tag directory has different children based on whether the tag is associated
+with a value or not. If a tag does not have an associated value (this is the
+case for the \dir{favourite} tag directory in
+Figure~\ref{fig:sample-tagfs-tree}) then the corresponding tag directory will
+contain a symbolic link for each path that shares the tag. Each symbolic link
+points to the tagged path and shares the same name as the last component of the
+tagged path. An example of one of these symbolic links is \symlink{Heat (1995)}
+in the \dir{favourite} directory. Alternatively, if a tag is associated with a
+value then the children of the tag directory are the enumerated values
+associated with that tag. An example of this type of tag directory is
+\dir{genre} with two associated values represented by the value directories
+\dir{crime} and \dir{rock}. Each of these value directories contains symbolic
+links to the paths that are tagged with the tag of the parent tag directory and
+the value of the value directory. These two types of directories provide an
+easy to access method of performing simple queries of the database for a single
+tag. However, it is desirable to be able to perform more advanced queries from
+the file system.
+
+This is where the query directory (\dir{?/}) is useful. The query directory
+contains sub-directories representing each of the stored queries saved by the
+\texttt{stored-queries} subcommand. The stored query directories are named with
+the format \texttt{<query-name> @ [<query>]}. Each stored query directory
+contains the results of executing the stored query the directory represents. In
+Figure~\ref{fig:sample-tagfs-tree} the stored query directory is named
+\texttt{favourite-crime} and contains the results of executing the
+\texttt{type=film and genre=crime and favourite} query, which in this example
+is one path represented by the symbolic link \symlink{Heat (1995)}. Stored
+queries are useful for saving frequently used queries, but it would be very
+restricting to only be able to access the results of queries previously stored
+in the system. To make running one-off queries less tedious, the query
+directory also supports running arbitrary queries by looking up
+`hidden' directories\footnote{These directories are not actually hidden, rather
+they do not actually exist until they are looked up.}. These directories are
+children of the query directory (\dir{?/}) named after the query they
+represent. Using the tags established in Figure~\ref{fig:sample-tagfs-tree} as
+an example, looking up the directory \dir{?/genre=rock/} would result in a
+directory containing the results of the \texttt{genre=rock} query, which in
+this case would be a symbolic link named \symlink{01 Cherub Rock.flac} pointing
+to the target \file{/music/The Smashing Pumpkins/Siamese Dream/01 Cherub
+Rock.flac}. This is illustrated in Figure~\ref{fig:sample-tagfs-query-dir}.
 
 The file system also exposes another special directory: the \dir{tags}
 directory. The \dir{tags} directory provides a method of viewing all of the
@@ -547,6 +549,46 @@ remounting the file system to handle changes is completely unnecessary.
 \todo{Talk about use of static analysis - clippy.}
 \todo{Talk about use of cargo doc.}
 
+During the development of \texttt{tagfs} I tried to follow good software
+development practices. The aim of these practices being to improve the
+robustness of the code and to ensure that the code is readable and therefore
+maintainable. One of these techniques is static analysis. Static analysis is
+used to detect potential problems in the code without actually running it
+\todo{Do I need a source here?}. Rust has a first party static analysis tool
+called clippy\footnote{Named after everyone's favourite paper-clip. Can be
+found at \url{https://github.com/rust-lang/rust-clippy}}. Clippy can detect
+style problems and suggest alternatives, such as transforming iterator chains
+that contain a \verb@filter@ followed by a \verb@map@ into a single
+\verb@filter_map@ operation. Lots of the clippy style detections are for
+seemingly trivial problems (for example preferring the use of \verb@xs.first()@
+over \verb@xs.get(0)@) however, in my experience I found that these ``trivial''
+problems accumulate over time to make the code more difficult to read. In my
+opinion, putting in the effort to correct these small issues is important for
+improving the clarity of the code. Additionally clippy can also detect
+potential performance issues, for example clippy can detect useless heap
+allocations that would be better served by a simple reference to an existing
+allocation.
+
+Whilst developing the project, I endeavoured to document the public API
+functions of \texttt{tagfs} and some of the internal private functions also.
+Rust and the accompanying cargo\footnote{Cargo is the Rust programming
+language's build system and package manager, but it also includes an interface
+to the rust compiler's built in test runner and documentation builder. The
+cargo documentation can be found at
+\url{https://doc.rust-lang.org/cargo/index.html}} tooling makes creating and
+maintaining documentation simple and hassle-free by keeping the documentation
+next to the code that it documents. Code is documented through the use of
+special comments, placed directly above the relevant function or module, that
+describe what the code should do. When cargo is invoked to build the
+documentation using the \verb@cargo doc@ subcommand, all of these documentation
+comments are compiled into structured and browsable HTML
+documentation\footnote{It should be noted that none of these ideas about
+documentation are unique to Rust. The Rust documentation process is heavily
+inspired by and very similar to older systems such as javadoc and doxygen.}.
+Additionally, cargo will also build the documentation of all the dependencies
+of the project to create a cohesive collection of documentation for all code in
+the project.
+
 \subsection{Testing}
 
 \todo{Talk about cargo test, and difference between integration and unit
@@ -568,7 +610,9 @@ component of the query subsystem. Writing the tests before the implementation
 ensured that I had a good grasp of what the lexer needed to achieve and helped
 me to foresee tricky cases that the lexer would need to handle.
 Figure~\ref{fig:example-unit-test} is a code snippet from one of the tests in
-my project. It uses the \texttt{assert_eq!} macro to test equality between its
+my project. It uses the \verb@assert_eq!@\footnote{In Rust, macros that can be
+called like normal functions are terminated with a `\texttt{!}' to help
+differentiate them from normal functions.} macro to test equality between its
 arguments and to provide a useful error message if the test fails. These tests
 were particularly useful when it came to adding the \texttt{==} operator at a
 later date to the initial implementation of the query subsystem. It ensured
@@ -576,7 +620,7 @@ that the addition of a new operator did not break the existing functionality,
 which reduced the fear associated with modifying already working code.
 
 % example lex_query test {{{
-\begin{figure}[h]
+\begin{figure}
     \centering
     \begin{boxedverbatim}
 assert_eq!(
@@ -595,9 +639,24 @@ assert_eq!(
 
 I used integration testing to test the public API of the library component of
 \texttt{tagfs}. This is the API that both the command line interface and the
-FUSE file system use to operate the tag database. In Rust, integration tests
-are entirely separate crates\footnote{``Crate'' is the Rust specific term for
-compilation unit.}, so by design they cannot access anything that normal
-consumers of the library cannot.
+FUSE file system use to operate the tag database. Within these tests, the
+database is created entirely from scratch and stored in memory, so that the
+tests are easily reproducible. In Rust, integration tests are entirely separate
+crates\footnote{``Crate'' is the Rust specific term for compilation unit.}, so
+by design they cannot access anything that normal consumers of the library
+cannot.
+
+I also used integration testing to test the FUSE file system. This is done by
+creating a new temporary database and a temporary mount point. The file system
+is then mounted at this mount point using the new database. The database is
+then modified using the public API methods exposed by the \texttt{tagfs}
+library. These updates are then seen reflected in the file system where they
+are programmatically checked to ensure correctness. To make it easier to write
+tests that check the file system, I developed a series of macros (similar to
+the built in \verb@assert!@ and \verb@assert_eq!@ macros) to test file system
+state. These include \verb@assert_symlink!@ to ensure that a path exists and is
+a symlink, and \verb@assert_dir_children!@ to ensure that a directory is
+located at the given path and that the directory's children in the file system
+match those given to the macro.
 
 \todo{Full system testing of filesystem. Custom macros}
