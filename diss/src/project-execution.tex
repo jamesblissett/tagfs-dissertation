@@ -3,10 +3,10 @@
 
 \todo{Say what my project actually is.}
 My project is a tag-based FUSE file system (from now on creatively referred to
-as `tagfs'). Tagfs is written in the Rust programming language and relies on
-the `fuser' library to communicate with and decode messages from the FUSE
+as ``tagfs''). Tagfs is written in the Rust programming language and relies on
+the ``fuser'' library to communicate with and decode messages from the FUSE
 kernel module. Tagfs also makes use of the SQLite database library through the
-Rust wrapper interface provided by `rusqlite'. Specific features of tagfs are
+Rust wrapper interface provided by ``rusqlite''. Specific features of tagfs are
 discussed in more detail in Section \ref{section:features}. \todo{This feels
 like maybe it should be part of the introduction?}
 \todo{Talk about what exactly a tag is?}
@@ -544,10 +544,35 @@ remounting the file system to handle changes is completely unnecessary.
 \todo{Talk about how core functionality is implemented as a library separate to
     the cli.}
 
+The \texttt{tagfs} project has two main components: the FUSE file system and
+the CLI tool. There is a significant overlap in functionality between the two
+components, therefore it made sense to only implement functionality once and
+share the code between the two components. To do this I developed the shared
+functionality as a separate library.
+The CLI program is then a separate binary that is statically linked to this
+library and the file system is a sub-module within the library. This separation
+ensures that the CLI can operate on the database and mount the file system, but
+only through the API exposed by the shared library. Separating the concerns of
+the software (separating the user interface from the core functionality) also
+makes the software more easily testable. This is discussed in more detail in
+Section~\ref{sec:testing}.
+
+When I began to start implementing \texttt{tagfs} (after having done some broad
+design work) I had to decide which part of the project to work on first. I
+decided to first work on the part of the project which I anticipated would be
+the most the difficult. This was the file system portion of the project. I
+decided to work on, what I thought would be, the most difficult part of the
+project first to ensure that it was achievable. I did not want to leave a
+critical, but difficult, part of the project until much later on and find out
+that it was not possible or that I could not implement it satisfactorily.
+
 \subsection{Software Development Practices}
 
 \todo{Talk about use of static analysis - clippy.}
 \todo{Talk about use of cargo doc.}
+\todo{Talk about conditional compilation of the autotag feature to reduce
+dependencies.}
+\todo{Talk about how static typing helped me.}
 
 During the development of \texttt{tagfs} I tried to follow good software
 development practices. The aim of these practices being to improve the
@@ -587,9 +612,46 @@ documentation are unique to Rust. The Rust documentation process is heavily
 inspired by and very similar to older systems such as javadoc and doxygen.}.
 Additionally, cargo will also build the documentation of all the dependencies
 of the project to create a cohesive collection of documentation for all code in
-the project.
+the project (this was extremely useful in periods of internet outage).
+I found that the act of creating the documentation was more important than the
+actual documentation itself. Creating the documentation helped me to think
+clearly about what a given module should do and also helped me to discover any
+invariants that must be accounted for when calling particular functions. An
+example of this is the documentation for the ``fs'' module that helped me to
+both document and understand exactly how and in what order the ``fuser''
+library will call my code when an ``ls'' is performed in the file system.
+
+Another software development technique I made use of during development was
+conditional compilation in the form of cargo
+features\footnote{\url{https://doc.rust-lang.org/cargo/reference/features.html}}.
+Conditional compilation is a method for compiling the code base in different
+ways depending on a set of input parameters. For example, it might be desirable
+to compile a particular block of code only on certain platforms - conditional
+compilation allows this to be expressed in the source code. \todo{Maybe I need
+to properly reference the cargo book?} In \texttt{tagfs} I use conditional
+compilation to allow the user to specify, at compile time, whether they would
+like to include the autotagging functionality. The way that I achieve this is
+by using cargo features to define an ``autotag'' feature and to specify the
+additional dependencies that are required to build this feature. Then in the
+source code the module that implements the autotagging feature is preceded by
+the declaration ``\verb@#[cfg(feature = "autotag")]@'' which tells the Rust
+compiler to only compile this next block if the condition is true i.e. the
+``autotag'' feature is active. This provides a similar behaviour to
+preprocessor macros in C such as \verb@#ifdef@ and \verb@#ifndef@. The main
+reasons I chose to increase the complexity of the build process and use
+conditional compilation was to provide the user with flexibility regarding the
+number of dependencies required to build the code and to allow the user to
+disable features that may not be useful for them. I think this is especially
+relevant for the autotagging feature, because it is a feature that runs
+tangential to the rest of the code and therefore is easy to ``split out''
+without causing issues elsewhere in the code base.
+This would not be the case for other more fundamental features, such as tags
+being able to have an optional value. This feature runs deep throughout the
+project and therefore would not be a good target for conditional compilation as
+the complexity would be very high.
 
 \subsection{Testing}
+\label{sec:testing}
 
 \todo{Talk about cargo test, and difference between integration and unit
     tests. Talk about TDD for the lexer.}
