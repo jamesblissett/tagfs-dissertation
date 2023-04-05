@@ -3,12 +3,12 @@
 
 \todo{Say what my project actually is.}
 My project is a tag-based FUSE file system (from now on creatively referred to
-as ``tagfs''). Tagfs is written in the Rust programming language and relies on
-the ``fuser'' library to communicate with and decode messages from the FUSE
-kernel module. Tagfs also makes use of the SQLite database library through the
-Rust wrapper interface provided by ``rusqlite''. Specific features of tagfs are
-discussed in more detail in Section \ref{section:features}. \todo{This feels
-like maybe it should be part of the introduction?}
+as ``\texttt{tagfs}''). Tagfs is written in the Rust programming language and
+relies on the ``fuser'' library to communicate with and decode messages from
+the FUSE kernel module. Tagfs also makes use of the SQLite database library
+through the Rust wrapper interface provided by ``rusqlite''. Specific features
+of tagfs are discussed in more detail in Section \ref{section:features}.
+\todo{This feels like maybe it should be part of the introduction?}
 \todo{Talk about what exactly a tag is?}
 
 \section{Design}
@@ -46,6 +46,22 @@ particular category. Libraries with lots of recent commits tend to have more
 active communities and that often means that there are people asking questions
 and receiving answers which is useful to fill in any gaps in the documentation.
 
+The other programming language that I considered for my project was C. The main
+reason that I considered C was the fact that the reference implementation of a
+FUSE library (libfuse\footnote{\url{https://github.com/libfuse/libfuse}}) is
+written in C and most tutorials and documentation assume the use of C. Using C
+would have meant that I would have a much wider array of examples to help me
+implement \texttt{tagfs}. However, I decided against the use of C because I
+felt that I would miss the higher level of abstraction provided by other
+languages with features such as generics and tagged unions built into the
+language. Additionally, I did not want to deal with painfully manual memory
+management and I did not feel confident in producing code without memory
+safety bugs such as use after free and segmentation faults. These memory safety
+bugs can be somewhat prevented through the use of modern sanitisers such as
+ASAN and UBSAN, but these sanitisers are only effective at runtime and only if
+the pathological case that causes the bug appear. Rust on the other hand can
+catch these bugs at compile time and prevent them from ever occurring.
+
 \todo{Why is Rust a suitable programming language for my project?
 Alternatives? Why Rust not C?}
 
@@ -61,6 +77,10 @@ an SQL database was the ability to constrain my data and enforce invariants at
 the database level. While it is possible to do this with a flat file approach,
 I believed that this would be difficult to implement and less performant than
 using a database.
+Additionally, it made sense to use an off-the-shelf solution because the
+particular underlying data store is not directly relevant to the goals of the
+project and therefore I could have spent a lot of time reinventing the wheel
+rather than creating \texttt{tagfs}.
 
 Once I had decided that I was going to use a database, my choice of which
 database implementation to use was very easy. SQLite is the most deployed
@@ -76,6 +96,52 @@ talked about the distinction between safe and unsafe Rust code somewhere.}
 
 \subsection{Database Schema Design}
 \todo{Not sure how much I can squeeze out of this tbh.}
+
+After having decided to use an SQL database, I needed to design a schema for
+each table in the database. I settled on two tables initially: one to store the
+tags and one to store the mapping of tags to paths. The second table contains a
+foreign key field that references a tag in the first table.
+The reason I decided to have a table entirely dedicated to storing tags was to
+enforce a consistent usage for each tag. This means that for every usage of a
+tag, the tag must always be given with or without a value, but it must be
+consistent across all uses of a tag. If I did not have a dedicated table to
+restrict each tag to one usage style, then each usage of a tag could have
+potentially different behaviour which would be confusing.
+
+I also use the ``trigger'' feature of SQL to ensure that tags that are no
+longer used by any path are removed from the database (the trigger code is
+shown in Figure~\ref{fig:sql-trigger}). This helps to avoid the problem of
+having unused tags in the output of the CLI and file system. The trigger is run
+whenever a row is deleted in the ``TagMapping'' table. When the trigger is run
+a ``DELETE'' SQL command is issued that searches for any usage of the deleted
+tag in the ``TagMapping'' table, if there is no usage found then the tag is
+removed from the ``Tag'' table.
+
+% trigger code {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+
+CREATE TRIGGER IF NOT EXISTS
+RemoveUnusedTags AFTER DELETE ON TagMapping
+BEGIN
+  DELETE FROM Tag
+  WHERE
+    Tag.TagID = OLD.TagID
+    AND NOT EXISTS(
+      SELECT TRUE
+      FROM TagMapping
+      WHERE TagMapping.TagID = OLD.TagID);
+END
+    \end{boxedverbatim}
+    \caption[SQL Trigger Code]{SQL trigger code to remove tags that are no
+    longer referenced from the database.}
+    \label{fig:sql-trigger}
+\end{figure}
+% }}}
+
+\todo{Maybe include an Entity Relationship Diagram?}
+\todo{Talk about not over-normalising data?}
 
 \section{Features}
 \label{section:features}
@@ -649,6 +715,22 @@ This would not be the case for other more fundamental features, such as tags
 being able to have an optional value. This feature runs deep throughout the
 project and therefore would not be a good target for conditional compilation as
 the complexity would be very high.
+
+I also made use of logging to help me develop \texttt{tagfs}. My main usage of
+logging was to be able to trace which FUSE functions are called and in what
+order when performing a particular file system operation. It is through this
+logging that I was able to produce the documentation for how exactly the
+``fuser'' library calls my code. When commands such as ``tree'' are run on the
+file system, there can be a lot of logging output. To reduce the logging noise,
+I used the Rust standard logging package to attach levels to each log
+statement, so that, at runtime, the logging level can be specified using an
+environment variable. This means that it is easy to control the logging output
+without having to tediously guard each logging statement with a conditional.
+Additionally, since I used the standard Rust logging package I was able to
+integrate my logging with the logs from the libraries used in \texttt{tagfs}.
+This meant that I could peer into the logs for code that I depend on and use it
+to help me understand what the code was doing, whilst also being able to easily
+disable it with one standard mechanism.
 
 \subsection{Testing}
 \label{sec:testing}
