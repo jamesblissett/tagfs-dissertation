@@ -631,6 +631,52 @@ decided to work on, what I thought would be, the most difficult part of the
 project first to ensure that it was achievable. I did not want to leave a
 critical, but difficult, part of the project until much later on and find out
 that it was not possible or that I could not implement it satisfactorily.
+Following this strategy, I started by implementing a file system that could
+simply be mounted and contained no files or directories. Then building on this
+prototype, I created a file system that contained a static list of empty
+directories. Next I used a hash map structure to represent a file system
+containing a series of directories that each have their own children (which
+were limited to symbolic links for simplicity). This iterative development
+process formed the basis for all progress in the project and allowed me to
+increase the complexity of the project gradually rather than trying to build
+the entire thing at once which would have been overwhelming.
+
+After creating a simple file system based on hard coded values, I decided to
+try and connect the file system to a database to allow for non-hard-coded paths
+in the file system. I wanted to ensure that any direct communication with the
+database via SQL was abstracted away into a separate module to avoid
+``polluting'' other parts of the code with implementation details specific to
+the database. This made the file system code easier to read due to the
+abstraction of the database and has the additional benefit of making the
+database code easier to reuse. After connecting the database to the file
+system, I needed a way to modify the database so I started to work on the CLI.
+I added a simple interface to add and remove tags from the database by using
+and extending the database module I previously developed for the file system. I
+decided not to handle command line argument parsing myself and instead used the
+popular ``clap\footnote{Clap is an acronym for ``command line argument parser''
+and can be found at the following url \url{https://crates.io/crates/clap}}''
+library to build a command line interface in a declarative fashion. This made
+it easy to visually see the subcommands and options that I had defined and to
+document them in the same place.
+\todo{Defo Maybe example of declarative nature of clap arg parsing?}
+
+Next I created the concept of queries within \texttt{tagfs} and decided to make
+a mini DSL to specify them. This required me to create a tokeniser that splits
+a given query into a stream of tokens. This stream of tokens can then be
+converted to SQL via another function. I then packaged these functions into a
+sub-module of the database module, so that they could be used from the CLI (via
+a dedicated subcommand) and from the file system. When developing the query
+sub-module, I decided to simplify the implementation by using the principle of
+"Rubbish in, rubbish out" such that if the user gave a malformed or nonsensical
+query then it would be allowed for the query builder to output nonsensical or
+malformed SQL. My theory was that generating invalid SQL was not a problem
+because it would be caught and rejected by SQLite. This greatly simplified the
+query builder because it meant that I would not have to write a fully fledged
+parser and SQL generator for the query language. However, there were downsides
+to this approach such as the inability for \texttt{tagfs} to tell the user
+where the error in an invalid query is because \texttt{tagfs} does not have
+this information. I think this was a fair trade-off, because queries tend to be
+on the shorter side and spotting errors is usually fairly simple.
 
 \subsection{Software Development Practices}
 
