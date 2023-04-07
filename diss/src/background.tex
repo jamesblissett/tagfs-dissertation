@@ -74,7 +74,7 @@ A hard link is a reference to a piece of data. Hard links are very similar to
 regular files, because regular files are in fact hard links. A hard link
 references an inode\footnote{\todo{Explain that even Dennis Ritchie does not
 know exactly why an inode is called an inode.}
-https://lkml.indiana.edu/hypermail/linux/kernel/0207.2/1182.html}\cite{inode}
+https://lkml.indiana.edu/hypermail/linux/kernel/0207.2/1182.html} \cite{inode}
 by way of an inode number. An inode is a data structure internal to the file
 system that is used to keep track of metadata relating to some user data. An
 inode number is a number that uniquely identifies an inode on a particular file
@@ -143,27 +143,26 @@ system\footnote{On some platform like Microsoft Windows, using the platform
 library is required because the system call interface is not guaranteed to be
 stable between releases.}. \todo{Not sure if I should stay abstract about a
 particular operating system or be specifically about UNIX-likes here.} On
-UNIX-like operating systems this library is \texttt{libc}\cite{libc}. \todo{Do
+UNIX-like operating systems this library is \texttt{libc} \cite{libc}. \todo{Do
 I need to talk about the difference between an abstract libc and concrete like
 glibc or musl?} The overwhelming majority of programs that run on UNIX-like
 operating systems use \texttt{libc} to help them interact with the platform.
 The operating systems' \texttt{libc} contains functions that require access to
-the file system (such as \texttt{stat}\cite{stat-syscall}). To get access to
+the file system (such as \texttt{stat} \cite{stat-syscall}). To get access to
 the file system the \texttt{libc} function will execute a system
-call\cite{syscalls} (often called a syscall). A system call is a way for an
+call \cite{syscalls} (often called a syscall). A system call is a way for an
 unprivileged user program to ask the operating system to perform an action on
 its behalf. When executed, a system call performs a context switch
 \todo{Explain what a context switch actually is.} and jumps into kernel
-code\footnote{This is not strictly true, some system calls do not require jumping
-into kernel code.}.
-The kernel is the part of the operating system that, amongst many other
-functions, responds to system calls. When the kernel responds to a system call
-that requires accessing the file system, it must first ascertain which file
-system implementation is the correct one to call for this particular action.
-On Linux this is the VFS layer in the kernel\cite{kernel-vfs}. Once this is
-determined, the kernel asks the file system implementation to perform the
-action specified by the system call. It may also return some data to the
-calling user program via a buffer or a return value.
+code\footnote{This is not strictly true, some system calls do not require
+jumping into kernel code.}. The kernel is the part of the operating system
+that, amongst many other functions, responds to system calls. When the kernel
+responds to a system call that requires accessing the file system, it must
+first ascertain which file system implementation is the correct one to call for
+this particular action. On Linux this is the VFS layer in the kernel
+\cite{kernel-vfs}. Once this is determined, the kernel asks the file system
+implementation to perform the action specified by the system call. It may also
+return some data to the calling user program via a buffer or a return value.
 
 \subsection{FUSE File Systems}
 
@@ -185,7 +184,7 @@ running in kernel mode has the power to do anything on the system, so a
 security issue in any code run at this level code could result in a compromised
 system. To reduce the danger of writing a file system, Linux allows file
 systems to be run as userspace processes using a technology called
-FUSE\cite{kernel-fuse} (file system in userspace).
+FUSE \cite{kernel-fuse} (file system in userspace).
 
 Looking at Figure~\ref{fig:fuse diagram}, there are similarities between the
 process of accessing a file system built into the kernel (in the diagram NFS
@@ -201,7 +200,14 @@ the user space process. The user space process can then do whatever it pleases
 to generate a response which is then passed back through the layers into the
 kernel and back to the calling user space program that made the request.
 
-\todo{Disadvantages of FUSE - slow}
+FUSE file systems provide more flexibility and safety compared to file systems
+compiled into the kernel. However, this flexibility comes at performance and
+hardware utilisation cost with an average of a 31\% increase in CPU utilisation
+when file system requests are routed through the FUSE layer \cite{fuse-perf}.
+The performance decrease has a larger variance with some cases having as low as
+5\% overhead. However, in other cases that are "unfriendly to FUSE" such as
+concurrent random access to large files can cause an 83\% decrease in
+performance even if optimised \cite{fuse-perf}.
 
 \subsubsection{Mounting FUSE File Systems}
 \label{mounting-fuse-fs}
@@ -211,13 +217,15 @@ system to an empty directory in another parent file system. The two file
 systems remain entirely independent; their connection is only simulated using
 the kernel's VFS layer. However, to other programs it appears that the contents
 of the child file system are available as a sub-directory in another parent
-file system.
+file system. This allows the composition of many independent file systems into
+one virtual file system with the kernel handling dispatching requests to the
+correct underlying file system.
 
 On Linux mounting a file system is a restricted operation that can only be
-performed by the root user\cite{mount}. However, FUSE has the explicit goal of
-"allowing secure, non-privileged mounts"\cite{kernel-fuse}. To allow FUSE file
+performed by the root user \cite{mount}. However, FUSE has the explicit goal of
+"allowing secure, non-privileged mounts" \cite{kernel-fuse}. To allow FUSE file
 systems to be mounted by non-privileged users, FUSE provides a mounting utility
-\texttt{fusermount} which is installed with the setuid\cite{setuid} permission
+\texttt{fusermount} which is installed with the setuid \cite{setuid} permission
 set to the root user. A binary with this permission can be run by a normal
 user, but whilst it is running it has all the privileges of the root user. This
 allows a normal user to mount a FUSE file system.
@@ -234,4 +242,55 @@ an environment variable at launch.
 \todo{Talk (briefly I think) about the binary protocol fuse talks over
 \texttt{/dev/fuse}}
 
-\section{The Rust Programming Language}
+\section{Memory Safety and the Rust Programming Language}
+
+In this section I will attempt to give a brief overview of the Rust programming
+language and how it ensures memory safety without the use of a runtime garbage
+collector. Also I will talk about why memory safety is important, and the
+problems caused when it is not adhered to.
+
+Memory safety is a property of a program that means that the program does not
+under any circumstances have any bugs relating to invalid pointer access or
+accessing uninitialised data \todo{source?}. These two classes of bug contain
+many common sources of security issues in programs such as use-after-free,
+buffer overflow, and invalid pointer dereferences. In fact memory safety
+related bugs are some of the most frequent security bugs in many widely used
+software packages such as Chromium \cite{chromium-mem-safety}, with the project
+estimating that 70\% of their security bugs are related to memory safety
+issues.
+
+\todo{Talk about and define exactly what are use-after-free, buffer overflow
+etc.}
+\todo{Talk about how memory leaks are not a memory safety issue.}
+
+One way of ensuring memory safety is through the use of a runtime garbage
+collector. This, in addition to disallowing pointer arithmetic, ensures memory
+safety by not allowing the user program to directly allocate and free memory
+itself, and by not allowing access to invalid memory locations. However, for
+some programs runtime garbage collection is not suitable for performance
+reasons. For example, real time systems with hard deadlines may not be able to
+use a garbage collector due to the unpredictability of the moment of and the
+duration of garbage collection pauses. It is in these case where a language
+like Rust can prove its value by having fast and consistent performance as well
+as memory safety.
+
+Rust ensures memory safety by refusing to compile programs that do not satisfy
+a particular set of rules at compile time. The sub-system in the Rust compiler
+that checks these rules against the given code is called the ``borrow
+checker''. The borrow checker works via the concept of ``ownership''
+\cite{rust-book-ownership}. Ownership means that every value in a Rust program
+has one and only one owner. When the owner is no longer accessible i.e. it has
+gone out of scope, then the value it owns is freed (or in Rust parlance
+``dropped''). Ownership of a value can be transferred or handed over to another
+owner, but once this has occurred the original owner is unable to access the
+value therefore preserving the single owner rule. Ensuring that a value only
+has one owner in this way is enough to be able to statically insert calls to
+free values when they go out of scope. Transferring ownership of a value can be
+cumbersome when it is only temporary, to reduce the burden of always
+transferring ownership Rust has the concept of ``borrowing'' a value and
+receiving a ``reference'' to it. A reference is similar to a pointer in other
+languages, but it is additionally constrained by the fact that all references
+must always be valid at all times. There are two types of reference in Rust:
+mutable and immutable. To ensure memory safety Rust enforces the rules that
+there can be either one mutable reference or many immutable references at any
+given time, but never both.
