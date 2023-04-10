@@ -290,7 +290,79 @@ cumbersome when it is only temporary, to reduce the burden of always
 transferring ownership Rust has the concept of ``borrowing'' a value and
 receiving a ``reference'' to it. A reference is similar to a pointer in other
 languages, but it is additionally constrained by the fact that all references
-must always be valid at all times. There are two types of reference in Rust:
-mutable and immutable. To ensure memory safety Rust enforces the rules that
-there can be either one mutable reference or many immutable references at any
-given time, but never both.
+must always be valid at all times. Valid meaning that the pointer is not null
+and that the pointer has not been freed or deallocated. There are two types of
+reference in Rust: mutable and immutable. To ensure memory safety Rust enforces
+the rules that there can be either one mutable reference or many immutable
+references at any given time, but never both.
+
+An example of memory unsafe code that Rust prevents is shown in
+Figure~\ref{fig:rust-xor-borrow-rule}. In the first line a vector is allocated
+and initialised with the values 1, 2, and 3. The vector is given the name
+``data'' and prefixed with the ``mut'' modifier to state that this value is
+allowed to be mutated (in Rust values are immutable by default). In the second
+line we borrow from the vector to obtain an immutable reference to the first
+item in the vector and then store the reference in the ``first'' variable. Then
+on the third line the value 4 is pushed onto the end of the vector. The
+``push'' method requires mutable access to the vector to perform its
+modification to the vector\footnote{We can see this explicitly in the type
+signature of the ``push'' method on vectors ``\texttt{pub fn push(\&mut self,
+value: T)}''. The key is the ``mut'' keyword after the \texttt{\&} to indicate
+a mutable reference is required.}. On the final line, the reference stored in
+the ``first'' variable is used to access the first value of the vector and
+print it out. This code is disallowed by the Rust compiler because, on the
+third line, the code attempts to acquire a mutable reference to the data vector
+whilst an immutable reference is already held, thereby breaking the rules of
+the borrow checker.
+
+Additionally, one of the reasons for the enforcement of the ``mutable xor
+immutable`` reference rule is illustrated well by the example in
+Figure~\ref{fig:rust-xor-borrow-rule}. If this code were allowed to compile
+then, in certain situations, the code could attempt to read data from memory
+that has been freed. This situation could occur if upon pushing to the vector,
+there is no more space in the block of memory underlying the vector. Then to
+make more space for the new element, it becomes necessary to grow the vector by
+allocating a new larger chunk of memory and copying the existing elements to
+the new memory. After the reallocation, the old chunk of memory is freed and
+potentially released to the operating system. Now after the push call
+completes, the reference held by the ``first'' variable is still pointing to
+the location of the old memory allocation which has been freed. When the
+reference stored in ``first'' is dereferenced it could cause a segmentation
+fault or more insidiously it could only sometimes cause a segmentation fault,
+making it very difficult to debug. This is an example of a use-after-free bug,
+and one of the ways that Rust prevents them. Interestingly, the code compiles
+and runs correctly if the last line is removed. This is because the Rust
+compiler is clever enough to be able to notice that the reference stored in the
+``first'' variable is not used on or after the third line. Therefore, it is
+able to drop the borrow before the third line thereby allowing the mutable
+borrow to take place on line three as there are no other references to the
+``data'' vector at that time.
+
+% exclusive reference safety example {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+
+
+1 | let mut data = vec![1, 2, 3];
+2 | let first = &data[0];
+
+3 | data.push(4);
+4 | println!("The first element is: {first}");
+
+-----------------------------------------------
+error[E0502]: cannot borrow `data` as mutable because it is also borrowed as immutable
+let first = &data[0];
+             ---- immutable borrow occurs here
+
+data.push(4);
+^^^^^^^^^^^^ mutable borrow occurs here
+println!("The first element is: {first}");
+                                 ----- immutable borrow later used here
+    \end{boxedverbatim}
+    \caption[Example of memory unsafe code prevented by Rust]{Example memory
+    unsafe code disallowed by Rust's borrow checker with corresponding error
+    message}
+    \label{fig:rust-xor-borrow-rule}
+\end{figure}
+% }}}
