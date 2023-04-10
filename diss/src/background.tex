@@ -316,7 +316,7 @@ whilst an immutable reference is already held, thereby breaking the rules of
 the borrow checker.
 
 Additionally, one of the reasons for the enforcement of the ``mutable xor
-immutable`` reference rule is illustrated well by the example in
+immutable'' reference rule is illustrated well by the example in
 Figure~\ref{fig:rust-xor-borrow-rule}. If this code were allowed to compile
 then, in certain situations, the code could attempt to read data from memory
 that has been freed. This situation could occur if upon pushing to the vector,
