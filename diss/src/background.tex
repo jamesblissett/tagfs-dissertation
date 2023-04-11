@@ -305,12 +305,12 @@ line we borrow from the vector to obtain an immutable reference to the first
 item in the vector and then store the reference in the ``first'' variable. Then
 on the third line the value 4 is pushed onto the end of the vector. The
 ``push'' method requires mutable access to the vector to perform its
-modification to the vector\footnote{We can see this explicitly in the type
+modification to the vector\footnote{This can be seen explicitly in the type
 signature of the ``push'' method on vectors ``\texttt{pub fn push(\&mut self,
 value: T)}''. The key is the ``mut'' keyword after the \texttt{\&} to indicate
 a mutable reference is required.}. On the final line, the reference stored in
-the ``first'' variable is used to access the first value of the vector and
-print it out. This code is disallowed by the Rust compiler because, on the
+the ``first'' variable is dereferenced to access the first value of the vector
+and print it out. This code is disallowed by the Rust compiler because, on the
 third line, the code attempts to acquire a mutable reference to the data vector
 whilst an immutable reference is already held, thereby breaking the rules of
 the borrow checker.
@@ -362,7 +362,74 @@ println!("The first element is: {first}");
     \end{boxedverbatim}
     \caption[Example of memory unsafe code prevented by Rust]{Example memory
     unsafe code disallowed by Rust's borrow checker with corresponding error
-    message}
+    message. Taken and modified from Section 3 in \cite{rust-nomicon}.}
     \label{fig:rust-xor-borrow-rule}
+\end{figure}
+% }}}
+
+\todo{Talk about unsafe code and how it is necessary. \cite{rust-nomicon}}
+
+The rules of Rust combine to create a memory safe environment for writing
+programs that perform real work, but sometimes it is not possible to express a
+particular program in this safe environment. This can even been seen in the
+small example used previously in Figure~\ref{fig:rust-xor-borrow-rule}. On the
+second line a reference is taken to the first element in the ``data'' vector,
+under the hood this is classic C style pointer arithmetic - adding an offset to
+a base pointer. However, from the rules of Rust we know that all references
+must always be valid, so it is necessary to ensure that the base pointer
+combined with the given offset does not overflow or underflow the buffer
+underlying the vector. This can of course be easily checked by ensuring the
+offset is less than the number of items that may fit into the buffer. However,
+even with the check, at some point dereferencing the calculated pointer, which
+is an inherently unsafe operation, has to take place (if the value is going to
+be used at all). This means that Rust needs a mechanism to express unsafe
+operations within the language, if it is to be possible to implement a
+container like a vector in the language. Since the Rust standard library (which
+includes lots of container data structures including a vector) is implemented
+in Rust itself, this must and in fact does exist.
+
+Rust has the concept of the ``unsafe'' keyword that can be attached to certain
+Rust constructs such as blocks and functions. Adding the ``unsafe'' keyword to
+a Rust construct grants the programmer additional capabilities that are not
+possible in the normal safe Rust context. The main capabilities granted by
+unsafe Rust are the ability to dereference raw pointers and the ability to call
+other ``unsafe'' functions\footnote{There are more capabilities than these,
+but they will not be discussed here as they are less
+important.} \cite{rust-nomicon}. However, it is now up to the programmer to
+manually ensure that undefined behaviour (UB) is not invoked within the unsafe
+context, and additionally to ensure that any of the normal Rust rules regarding
+ownership and references are upheld. If these rules are not upheld then Rust's
+memory model has been violated and UB is likely to follow. An example usage of
+an ``unsafe'' block is in Figure~\ref{fig:rust-unsafe-block} where an unsafe
+block is used to implement an operation that would be impossible in entirely
+safe Rust. The example function can be used to obtain the nth byte in a byte
+array in a safe way. Providing a safe wrapper around unsafe functionality is a
+very common pattern in Rust, and is what allows useful programs to be written
+in a safe environment. The reason why the unsafe block is required in the
+example function is because the \verb@get_unchecked@ function is marked unsafe
+at its declaration, and then the raw pointer returned by the
+\verb@get_unchecked@ function is dereferenced with the \verb@*@ operator.
+Additionally, the if statement in the function is used to uphold the necessary
+invariant (i.e. is the given index in range) to make this function ``sound''.
+Soundness being the property that it is impossible for the caller to invoke UB
+by using this function.
+
+% unsafe index code example {{{
+\begin{figure}[h]
+    \centering
+    \begin{boxedverbatim}
+
+fn index(idx: usize, arr: &[u8]) -> Option<u8> {
+    if idx < arr.len() {
+        unsafe { Some(*arr.get_unchecked(idx)) }
+    } else {
+        None
+    }
+}
+    \end{boxedverbatim}
+    \caption[Example usage of an unsafe block in Rust]{Example function that
+    necessarily uses an unsafe block. Taken from Section 1.3 in
+    \cite{rust-nomicon}.}
+    \label{fig:rust-unsafe-block}
 \end{figure}
 % }}}
