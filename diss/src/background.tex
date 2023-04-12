@@ -1,8 +1,6 @@
 \chapter{Background}
 \vspace{1cm}
 
-Background blah.
-
 \section{File Systems}
 
 \todo{Find reference for basic file system stuff.}
@@ -367,8 +365,6 @@ println!("The first element is: {first}");
 \end{figure}
 % }}}
 
-\todo{Talk about unsafe code and how it is necessary. \cite{rust-nomicon}}
-
 The rules of Rust combine to create a memory safe environment for writing
 programs that perform real work, but sometimes it is not possible to express a
 particular program in this safe environment. This can even been seen in the
@@ -393,26 +389,26 @@ Rust constructs such as blocks and functions. Adding the ``unsafe'' keyword to
 a Rust construct grants the programmer additional capabilities that are not
 possible in the normal safe Rust context. The main capabilities granted by
 unsafe Rust are the ability to dereference raw pointers and the ability to call
-other ``unsafe'' functions\footnote{There are more capabilities than these,
-but they will not be discussed here as they are less
-important.} \cite{rust-nomicon}. However, it is now up to the programmer to
-manually ensure that undefined behaviour (UB) is not invoked within the unsafe
-context, and additionally to ensure that any of the normal Rust rules regarding
-ownership and references are upheld. If these rules are not upheld then Rust's
-memory model has been violated and UB is likely to follow. An example usage of
-an ``unsafe'' block is in Figure~\ref{fig:rust-unsafe-block} where an unsafe
-block is used to implement an operation that would be impossible in entirely
-safe Rust. The example function can be used to obtain the nth byte in a byte
-array in a safe way. Providing a safe wrapper around unsafe functionality is a
-very common pattern in Rust, and is what allows useful programs to be written
-in a safe environment. The reason why the unsafe block is required in the
-example function is because the \verb@get_unchecked@ function is marked unsafe
-at its declaration, and then the raw pointer returned by the
-\verb@get_unchecked@ function is dereferenced with the \verb@*@ operator.
-Additionally, the if statement in the function is used to uphold the necessary
-invariant (i.e. is the given index in range) to make this function ``sound''.
-Soundness being the property that it is impossible for the caller to invoke UB
-by using this function.
+other ``unsafe'' functions\footnote{There are more capabilities than these, but
+they will not be discussed here as they are less important.}
+\cite{rust-nomicon}. However, it is now up to the programmer to manually ensure
+that undefined behaviour (UB) is not invoked within the unsafe context, and
+additionally to ensure that any of the normal Rust rules regarding ownership
+and references are upheld. If these rules are not upheld then Rust's memory
+model has been violated and UB is likely to follow. An example usage of an
+``unsafe'' block is in Figure~\ref{fig:rust-unsafe-block} where an unsafe block
+is used to implement an operation that would be impossible in entirely safe
+Rust. The example function can be used to obtain the nth byte in a byte array
+in a safe way. Providing a safe wrapper around unsafe functionality is a very
+common pattern in Rust, and is what allows useful programs to be written in a
+safe environment. The reason why the unsafe block is required in the example
+function is because the \verb@get_unchecked@ function is marked unsafe at its
+declaration, and then the raw pointer returned by the \verb@get_unchecked@
+function is dereferenced with the \verb@*@ operator. Additionally, the if
+statement in the function is used to uphold the necessary invariant (i.e. is
+the given index in range) to make this function ``sound''. Soundness being the
+property that it is impossible for the caller to invoke UB by using this
+function.
 
 % unsafe index code example {{{
 \begin{figure}[h]
