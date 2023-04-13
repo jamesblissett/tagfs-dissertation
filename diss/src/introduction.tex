@@ -1,7 +1,61 @@
 \chapter{Introduction}
 \vspace{1cm}
 
-Intro blah.
-\todo{What have I done?}
-\todo{If someone reads this section they should get a reasonable understanding
-    of what I have achieved.}
+Organising files can be a tedious, error-prone, and unsatisfying activity. The
+file system has survived to this day mostly unchanged from its initial origins
+in modelling a real physical paper filing system \todo{ref here}. The
+hierarchical structure enforced by the file system can feel confining and
+inflexible. My project aims to attempt a different file management strategy,
+whilst still maintaining compatibility and interoperability with the normal
+hierarchical method. The file management strategy of my project is based upon
+``tagging'' files (more specifically file paths) with small items of metadata
+known as ``tags''. A tag can be either a simple string such as ``favourite'' or
+it may consist of a tag name and a tag value for example ``year=2019''. These
+tags may then be used as parameters in a search to find files that satisfy
+certain criteria. Examples of searches could include, finding all the files
+with the ``year=2019'' tag, but without the ``favourite'' tag.
+
+The project maintains compatibility with the traditional hierarchical file
+system structure by exposing a virtual file system using the FUSE technology
+available for Linux. By using this file system, the user may perform arbitrary
+queries against tagged files in the system by specifying their query as a file
+path. They may also lookup a particular file by name to discover what tags are
+associated with it. Using a virtual file system approach allows the user to
+access their files using the tag based methodology from within all the normal
+software applications and operating system components that they are familiar
+with. The integration of the tag based strategy with the traditional
+hierarchical method, is a much more feasible way of adopting tag based file
+organisation compared to requiring the operating system and every user program
+to be made aware of and updated to handle the new paradigm.
+
+The intended users of the software are technically capable users who already
+know their way around and are comfortable on the command line. The software
+provides a command line interface alongside the virtual file system. This CLI
+tool can be used to integrate the tag-based file system with the user's
+existing CLI workflow and follows common CLI conventions to provide immediate
+familiarity for the targeted technical users.
+
+By using the project, the intended users will be able to manage their files in
+a more flexible way, whilst also being able to attach extra metadata to a file
+path. Additionally, the more powerful querying abilities of the software will
+allow users to find their files more easily, and may even allow the user to
+be able to identify common properties between files they previously believed
+unrelated.
+
+Whilst developing the project, I made use of several software development
+techniques such as automated testing, creating documentation, and static
+analysis. In later sections I will justify their usage and evaluate how they
+helped me to develop a robust and maintainable system.
+
+\vspace{4mm}
+The specific aims for my project are as follows:
+\begin{itemize}
+    \item Discuss and justify the use of particular appropriate technologies
+        for building the software.
+    \item Design and implement a queryable tag-based file system using the FUSE
+        technology by following professional software development strategies.
+    \item Evaluate how using professional software development techniques
+        contributed to the success of the project.
+    \item Explore potential improvements that could be made to the project
+        itself and to the development techniques used to create the software.
+\end{itemize}
