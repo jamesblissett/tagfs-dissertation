@@ -1,9 +1,53 @@
 \chapter{Evaluation}
 \vspace{1cm}
 
-\todo{Evaluation blah.}
-
-\todo{Talk about who the users are and why it is appropriate for them here?}
+\todo{Probably this is better in another section I think? Talk about who the
+users are and why it is appropriate for them here?}
 
 \todo{Talk about potential future improvements and why they would be
 improvements for the intended userbase}
+
+\section{Potential Future Work}
+
+Due to the modular design and iterative development style used to develop the
+\texttt{tagfs} project, it would be easy to extend the project with new
+features and even entirely new interfaces. For example, it could be interesting
+to create a GUI for \texttt{tagfs}. This would allow users to browse and edit
+the tag database in a more visual way. A more visual style of tag manipulation
+could broaden the intended user base considerably. This is because allowing the
+users to modify the tag database through a GUI would remove the requirement for
+a user to have experience with the command line, and since almost all
+non-technical users are inexperienced with the command line this could
+potentially create a more feasible route to them using \texttt{tagfs}. For
+technical users however, I do not think a GUI would bring a great deal of
+value. This is because I think that most technical users would want to automate
+their interactions with \texttt{tagfs} via scripting, and only rarely would
+they need to manually interact with the program. In this case of rare manual
+interaction, it would not make sense to open a dedicated GUI and attempt to
+remember its idiosyncrasies. I also believe technical users would prefer to
+interact via the CLI because it would be more familiar to them after having
+development scripts around it.
+
+Another potential avenue that the project's development could be taken down is
+allowing the user to modify the tag database from the file system. This would
+make using the CLI tool less necessary, and make editing the tag database more
+intuitive and natural. There are lots of ways a feature like this could work.
+One way would be to allow the user to remove a tag directory within the virtual
+file system, the file system would then intercept the request and as a
+consequence remove the tag represented by the deleted directory from all file
+paths that it is currently tagged on. Another way could be to allow the editing
+of a file's tags by editing the ``.tags'' file that is automatically generated
+by the file system. This could work similarly to the edit subcommand from the
+CLI. Even deleting a ``.tags'' file could be implemented to remove all traces
+of that file path from the tag database.
+
+One feature that could be useful for users would be the ability to customise
+the autotagging process. This could be done with custom user created rules that
+use regular expressions to match path components or specific file metadata.
+After a rule has been matched, an action can take place to generate tags for
+the matched file. This could be as simple as assigning a static string to a
+given rule or as complex as allowing an external script to be used to generate
+a set of tags. This would allow the user to be more confident in using the
+autotagging feature as they would be sure it would tag files exactly to their
+specifications, and an increase in the usage of autotagging means there is less
+friction in adding new files to the system.
