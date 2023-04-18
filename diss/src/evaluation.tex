@@ -7,7 +7,48 @@ users are and why it is appropriate for them here?}
 \todo{Talk about potential future improvements and why they would be
 improvements for the intended userbase}
 
+\todo{Does the software do what it is supposed to do?}
+
+I believe that the \texttt{tagfs} software is useful and achieves its goals of
+implementing a method of tag based file management via a virtual file system.
+This is realised by the file system component of \texttt{tagfs} that allows the
+user to browse and query their files in a more abstract way by using tags
+instead of file system paths. The additional task of tag management takes place
+using the command line tool. Together these allow a user to have a reasonably
+complete tag-based file management experience. The implementation of the
+virtual file system of \texttt{tagfs} is robust and handles edge cases
+gracefully without unintended crashes. This is achieved through extensive use
+of Rust's ``Result'' type to easily propagate errors higher up the call stack
+to where they are more relevant, and via attaching context messages to lower
+level error messages to make them more user friendly for both the programmer
+and the user. Using the Rust ``Result'' type also makes thinking about error
+handling mandatory, because to access a value wrapped in a result type you must
+handle the error or explicitly ignore the error. With the use of this pattern,
+it is impossible to forget to handle an error as all error handling is
+explicit. This is in contrast to languages such as C where error handling is
+often handled through negative return values (this is the case with the fork()
+libc function) this makes it very easy to forget to handle error cases and as a
+result can reduce the robustness of the software.
+
+The design of the system is flexible and does not restrict the user or funnel
+them towards any particular tagging methodology. This allows the user to create
+their own tagging system backed by \texttt{tagfs} rather than forcing a
+structure onto them. This flexibility is especially appreciated by the target
+user base, because (as power users) they do not want to be artificially
+constrained within a system that limits them to only the ideas that the
+developer originally thought of. The idea of flexibility is also extended to
+the command line component of \texttt{tagfs}, which is specifically designed to
+allow extensibility via the traditional UNIX method of pipes and shell scripts.
+This again allows the user to mould the system to their preference rather than
+relying on the developer to have conceived of every use case beforehand.
+Sticking to established platform conventions for the CLI, allows the user to
+easy integrate \texttt{tagfs} into their existing command line based workflow,
+and allows the software to feel more natural to existing technical users.
+
 \section{Potential Future Work}
+
+\todo{Tag dependency or grouping - eg a 'film' tag implies that you must have
+an 'imdb' tag also.}
 
 Due to the modular design and iterative development style used to develop the
 \texttt{tagfs} project, it would be easy to extend the project with new
