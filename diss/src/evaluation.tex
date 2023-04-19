@@ -1,14 +1,6 @@
 \chapter{Evaluation}
 \vspace{1cm}
 
-\todo{Probably this is better in another section I think? Talk about who the
-users are and why it is appropriate for them here?}
-
-\todo{Talk about potential future improvements and why they would be
-improvements for the intended userbase}
-
-\todo{Does the software do what it is supposed to do?}
-
 I believe that the \texttt{tagfs} software is useful and achieves its goals of
 implementing a method of tag based file management via a virtual file system.
 This is realised by the file system component of \texttt{tagfs} that allows the
@@ -44,6 +36,46 @@ relying on the developer to have conceived of every use case beforehand.
 Sticking to established platform conventions for the CLI, allows the user to
 easy integrate \texttt{tagfs} into their existing command line based workflow,
 and allows the software to feel more natural to existing technical users.
+Additionally, the file system component of \texttt{tagfs} naturally fits into a
+technical UNIX user's environment by virtue of the old adage ``\emph{everything
+is a file}''. This further strengthens the integration between \texttt{tagfs}
+and the user's everyday tools by allowing them to interact with \texttt{tagfs}
+like any other part of the system. The last way in which \texttt{tagfs}
+integrates with the user's system is through the \texttt{edit} subcommand. This
+allows the user to edit the tag database with their preferred editor. I believe
+this is a much better solution for editing the tag database than developing a
+full custom editor. This is because it allows the user extreme flexibility in
+how they edit the tag database, and it reuses the user's editor to do so, which
+as a power user they are surely familiar and comfortable with. This allows the
+user to forgo learning a single use specific editor, and instead focus on the
+task of editing the tag database.
+
+Using a DSL (domain specific language) for querying the tag database, is
+another way in which the system delivers the flexibility required by the target
+user base. The language allows users to be specific about defining a query that
+returns exactly the results they are interested in. This in combination with
+the stored queries feature, allows the user to spend the time to set up queries
+exactly as they desire, and then save them for later easy access. Setting up
+these stored queries and learning the query language itself does require
+initial investment into the software, but I believe that this is not a problem
+for the targeted users. This is because, as power users, they are used to
+software requiring initial effort to learn, but ultimately providing lots of
+value once over an initial hurdle. Examples of software in this category are
+the traditional UNIX power user utilities such as vim, emacs and the shell.
+
+I believe \texttt{tagfs} to be an example of a reasonably professionally
+developed software project. The usage of specific professional development
+techniques are spoken about in detail in Section~\ref{sec:implementation}. In
+general, the use of professional practices greatly helped me throughout the
+project. An example of this is building confidence in my code via testing,
+which allowed me to feel comfortable in modifying and extending my code,
+because I knew that any accidental modification to existing functionality would
+be caught by the tests. The use of static analysis tools helped me to write
+clearer and more correct code by warning me about potential problems with the
+code base. Keeping on top of these potential problems resulted in the code base
+being easier to read and therefore reason about. This could also have
+contributed to the robustness of the project through improving the clarity of
+the code and therefore bugs being easier to find.
 
 \section{Potential Future Work}
 
