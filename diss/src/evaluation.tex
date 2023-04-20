@@ -22,6 +22,21 @@ often handled through negative return values (this is the case with the fork()
 libc function) this makes it very easy to forget to handle error cases and as a
 result can reduce the robustness of the software.
 
+The project's robustness is further improved by ``standing on the shoulders of
+giants''. In the case of \texttt{tagfs} this means the use of high quality
+libraries, and development tools. Both of the two main libraries used
+(\texttt{fuser} and \texttt{rusqlite}) proved to be as high quality as I had
+hoped them to be. However, the documentation for the \texttt{fuser} was a
+little lacking, but I was able to remedy this by reading the source code.
+Thankfully the code seemed to be written with care, and I was able to navigate
+the foreign code base successfully to solve my issues. The \texttt{rusqlite}
+library had no issues with documentation, and I could also use most of the
+existing documentation for SQLite when it was insufficient. I believe that
+using an SQL database proved to be a good decision for this project as it was
+very easy to integrate with the code that I had already created up until that
+point. This was compounded by the fact that I was already familiar with the
+basics of SQL and I had experience with SQLite in other projects.
+
 The design of the system is flexible and does not restrict the user or funnel
 them towards any particular tagging methodology. This allows the user to create
 their own tagging system backed by \texttt{tagfs} rather than forcing a
@@ -75,9 +90,31 @@ clearer and more correct code by warning me about potential problems with the
 code base. Keeping on top of these potential problems resulted in the code base
 being easier to read and therefore reason about. This could also have
 contributed to the robustness of the project through improving the clarity of
-the code and therefore bugs being easier to find.
+the code and therefore making bugs easier to find.
+
+Using modular design principles such as encapsulation allowed me to more easily
+reason about my code, because it allowed me to hide implementation details that
+distract from the higher level data flow. This results in code that reads more
+nicely as a list of actions to perform rather than an unnecessarily complex
+information overload. An example of this in the code is the database module.
+Encapsulating all database functionality within a dedicated module, allowed me
+to expose a simple interface to the rest of the program for working with the
+database. This means that I did not have to give direct access to the
+underlying database connection to other parts of the application. As a
+consequence of this, I can rely on the program only performing known actions
+via the interface, so there is no ad hoc SQL scattered around the program. The
+increased code clarity provided by this sort of modular design results in more
+maintainable code which, for \texttt{tagfs} means that in the future someone
+new to the codebase could implement some of the features described in
+Section~\ref{sec:potential-features} with a minimal onboarding period as they
+work to understand the project's code base. More maintainable code is not just
+a benefit for other developers, as when coming back to your own code after a
+long period of time it can be difficult to remember why certain design
+decisions were made. This is where documenting and making the code as obvious
+as possible is important, for which modular design is a great helper.
 
 \section{Potential Future Work}
+\label{sec:potential-features}
 
 \todo{Tag dependency or grouping - eg a 'film' tag implies that you must have
 an 'imdb' tag also.}
