@@ -22,6 +22,15 @@ often handled through negative return values (this is the case with the fork()
 libc function) this makes it very easy to forget to handle error cases and as a
 result can reduce the robustness of the software.
 
+Another way that I found Rust to have been a good fit for my project was via
+the use of the Rust build system \texttt{cargo}. The cohesiveness of
+\texttt{cargo} in containing a documentation generator, testing harness and
+static analysis tool all in one package, meant that I could more easily focus
+on developing the project correctly rather than fighting with tooling. The fact
+that I did not have to choose a testing library and configure it, allowed me to
+just get on with writing tests. This meant that I was more likely to write more
+tests as there was such a low barrier to entry for creating them.
+
 The project's robustness is further improved by ``standing on the shoulders of
 giants''. In the case of \texttt{tagfs} this means the use of high quality
 libraries, and development tools. Both of the two main libraries used
