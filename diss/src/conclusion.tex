@@ -1,0 +1,37 @@
+\chapter{Conclusion}
+\vspace{1cm}
+
+\todo{This is my conclusion containing references to the parts of the code that
+do what I have said that I have done.}
+
+I believe that my project has been successful in achieving its goals to create
+a tag based file system. This can be seen to be the case through the
+documentation given in Chapter~\ref{section:features} regarding the features of
+the CLI tool and the virtual file system. Additionally, the code that
+implements these features can be found in the \verb@src/@ directory of the
+accompanying code repository. The definition of the CLI interface is located in
+the \texttt{cli.rs} file and the entry points for each subcommand can be found
+in the \texttt{tagfs.rs} file. The code for the file system resides within the
+\texttt{lib/fs.rs} and \texttt{lib/fs/entries.rs} files. The database layer can
+be found in the \texttt{lib/db.rs} file and its sub-modules can be found in the
+\texttt{lib/db/} directory. These include the query builder and the edit
+subcommand representation format. Combining these components together results
+in a reasonably useful package for managing files using a tag based strategy
+and accessing them from a virtual file system.
+
+The project has been developed using good professional practices. These
+practices include automated testing (both unit and integration style), modular
+design, static analysis, and creating documentation. I have discussed these
+practices and how they have helped me in more detail in
+Section~\ref{sec:implementation}. Evidence for these practices can be found
+throughout the project code, such as documentation comments on public functions
+and comments used throughout the code to explain particularly tricky or
+confusing sections of code. Additionally, evidence for testing can be found in
+the \texttt{tests/} directory in the root of the project. These are the
+integration tests. Unit tests are located in the main project directory (as per
+Rust testing guidelines found in the Rust book \cite{rust-testing}). An example
+set of unit tests can be found in \texttt{src/lib/db/query/tests.rs}.
+
+The project was developed with a specific group of users in mind, namely
+technical users on Linux. I believe that I have produced a piece of software
+that is tailored for these users and reflects their needs.
