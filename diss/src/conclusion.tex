@@ -1,9 +1,6 @@
 \chapter{Conclusion}
 \vspace{1cm}
 
-\todo{This is my conclusion containing references to the parts of the code that
-do what I have said that I have done.}
-
 I believe that my project has been successful in achieving its goals to create
 a tag based file system. This can be seen to be the case through the
 documentation given in Chapter~\ref{section:features} regarding the features of
@@ -22,8 +19,8 @@ and accessing them from a virtual file system.
 The project has been developed using good professional practices. These
 practices include automated testing (both unit and integration style), modular
 design, static analysis, and creating documentation. I have discussed these
-practices and how they have helped me in more detail in
-Section~\ref{sec:implementation}. Evidence for these practices can be found
+practices and how they have helped me to develop \texttt{tagfs} in more detail
+in Section~\ref{sec:implementation}. Evidence for these practices can be found
 throughout the project code, such as documentation comments on public functions
 and comments used throughout the code to explain particularly tricky or
 confusing sections of code. Additionally, evidence for testing can be found in
@@ -35,3 +32,10 @@ set of unit tests can be found in \texttt{src/lib/db/query/tests.rs}.
 The project was developed with a specific group of users in mind, namely
 technical users on Linux. I believe that I have produced a piece of software
 that is tailored for these users and reflects their needs.
+This is discussed in both the design period of the project in
+Section~\ref{sec:design} and in more detail in the evaluation in
+Chapter~\ref{chap:evaluation}. I believe the software is useful for these
+technical users because it integrates with their existing work flow. This is
+achieved via exposing the tag database via the file system, and via the usage
+of the convention following command line tool. These compose together to
+produce a familiar and easy to grasp experience for the target user base.
