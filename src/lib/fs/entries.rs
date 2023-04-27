@@ -4,9 +4,17 @@ use std::collections::HashMap;
 
 use fuser::{FileAttr, FileType, FUSE_ROOT_ID};
 use log::error;
+use once_cell::sync::Lazy;
 
 use crate::fs::INodeGenerator;
 use crate::fs::MOUNT_TIME;
+
+static CURRENT_UID: Lazy<libc::uid_t> = Lazy::new(|| {
+    unsafe { libc::getuid() }
+});
+static CURRENT_GID: Lazy<libc::gid_t> = Lazy::new(|| {
+    unsafe { libc::getgid() }
+});
 
 /// Hardcoded name of the query directory.
 const QUERY_DIR_NAME: &str = "?";
@@ -103,8 +111,8 @@ impl Entries {
                 kind: FileType::Directory,
                 perm: 0o755,
                 nlink: 1,
-                uid: 1000,
-                gid: 1000,
+                uid: *CURRENT_UID,
+                gid: *CURRENT_GID,
                 rdev: 0,
                 flags: 0,
                 blksize: 512,
@@ -139,8 +147,8 @@ impl Entries {
                     kind: FileType::Directory,
                     perm: 0o755,
                     nlink: 1,
-                    uid: 1000,
-                    gid: 1000,
+                    uid: *CURRENT_UID,
+                    gid: *CURRENT_GID,
                     rdev: 0,
                     flags: 0,
                     blksize: 512,
@@ -184,8 +192,8 @@ impl Entries {
                 kind: FileType::Directory,
                 perm: 0o755,
                 nlink: 1,
-                uid: 1000,
-                gid: 1000,
+                uid: *CURRENT_UID,
+                gid: *CURRENT_GID,
                 rdev: 0,
                 flags: 0,
                 blksize: 512,
@@ -228,8 +236,8 @@ impl Entries {
                 kind: FileType::RegularFile,
                 perm: 0o444,
                 nlink: 1,
-                uid: 1000,
-                gid: 1000,
+                uid: *CURRENT_UID,
+                gid: *CURRENT_GID,
                 rdev: 0,
                 flags: 0,
                 blksize: 512,
@@ -260,8 +268,8 @@ impl Entries {
                     kind: FileType::Directory,
                     perm: 0o755,
                     nlink: 1,
-                    uid: 1000,
-                    gid: 1000,
+                    uid: *CURRENT_UID,
+                    gid: *CURRENT_GID,
                     rdev: 0,
                     flags: 0,
                     blksize: 512,
@@ -298,8 +306,8 @@ impl Entries {
                     kind: FileType::Directory,
                     perm: 0o755,
                     nlink: 1,
-                    uid: 1000,
-                    gid: 1000,
+                    uid: *CURRENT_UID,
+                    gid: *CURRENT_GID,
                     rdev: 0,
                     flags: 0,
                     blksize: 512,
@@ -334,8 +342,8 @@ impl Entries {
                     kind: FileType::Directory,
                     perm: 0o755,
                     nlink: 1,
-                    uid: 1000,
-                    gid: 1000,
+                    uid: *CURRENT_UID,
+                    gid: *CURRENT_GID,
                     rdev: 0,
                     flags: 0,
                     blksize: 512,
@@ -372,8 +380,8 @@ impl Entries {
                     kind: FileType::Directory,
                     perm: 0o755,
                     nlink: 1,
-                    uid: 1000,
-                    gid: 1000,
+                    uid: *CURRENT_UID,
+                    gid: *CURRENT_GID,
                     rdev: 0,
                     flags: 0,
                     blksize: 512,
@@ -406,8 +414,8 @@ impl Entries {
                 kind: FileType::Symlink,
                 perm: 0o755,
                 nlink: 1,
-                uid: 1000,
-                gid: 1000,
+                uid: *CURRENT_UID,
+                gid: *CURRENT_GID,
                 rdev: 0,
                 flags: 0,
                 blksize: 512,
