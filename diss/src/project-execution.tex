@@ -3,11 +3,12 @@
 
 \todo{Say what my project actually is.}
 My project is a tag-based FUSE file system (from now on creatively referred to
-as ``\texttt{tagfs}''). Tagfs is written in the Rust programming language and
-relies on the ``fuser'' library to communicate with and decode messages from
-the FUSE kernel module. Tagfs also makes use of the SQLite database library
-through the Rust wrapper interface provided by ``rusqlite''. Specific features
-of tagfs are discussed in more detail in Section \ref{section:features}.
+as ``\texttt{tagfs}''). \texttt{tagfs} is written in the Rust programming
+language and relies on the ``fuser'' library to communicate with and decode
+messages from the FUSE kernel module. Tagfs also makes use of the SQLite
+database library through the Rust wrapper interface provided by ``rusqlite''.
+Specific features of tagfs are discussed in more detail in Section
+\ref{section:features}.
 \todo{This feels like maybe it should be part of the introduction?}
 \todo{Talk about what exactly a tag is?}
 
@@ -15,8 +16,6 @@ of tagfs are discussed in more detail in Section \ref{section:features}.
 \label{sec:design}
 
 \subsection{Intended Users}
-
-\todo{Talk about who would use the software i.e. power users etc.}
 
 When developing a software project it is important to keep the intended users
 of the project in mind as much as possible throughout the development of the
@@ -91,9 +90,6 @@ ASAN and UBSAN, but these sanitisers are only effective at runtime and only if
 the pathological case that causes the bug appear. Rust on the other hand can
 catch these bugs at compile time and prevent them from ever occurring.
 
-\todo{Why is Rust a suitable programming language for my project?
-Alternatives? Why Rust not C?}
-
 \subsubsection{Data Storage Back-end}
 
 Early on in the planning phase of my project I knew I was going to need some
@@ -119,8 +115,6 @@ documented. Unsurprisingly, there is a Rust wrapper library for
 SQLite\footnote{This highlights another important Rust feature: its foreign
 function interface (FFI)}. Rusqlite packages up SQLite into a more Rust-like
 interface suitable for use from entirely safe code.
-
-\todo{Why did I choose SQLite? Alternatives? Flat File? Own Format? NoSQL? ORM?}
 
 \subsection{Database Schema Design}
 
@@ -166,9 +160,6 @@ END
     \label{fig:sql-trigger}
 \end{figure}
 % }}}
-
-\todo{Maybe include an Entity Relationship Diagram?}
-\todo{Talk about not over-normalising data?}
 
 \section{Features}
 \label{section:features}
@@ -826,9 +817,6 @@ disable it with one standard mechanism.
 \subsection{Testing}
 \label{sec:testing}
 
-\todo{Talk about cargo test, and difference between integration and unit
-    tests. Talk about TDD for the lexer.}
-
 Whilst implementing \texttt{tagfs} I made sure to test the project's
 functionality frequently, both manually and automatically. Manual testing is
 initially important to check that a feature seems to work as expected, but
@@ -893,5 +881,3 @@ state. These include \verb@assert_symlink!@ to ensure that a path exists and is
 a symlink, and \verb@assert_dir_children!@ to ensure that a directory is
 located at the given path and that the directory's children in the file system
 match those given to the macro.
-
-\todo{Full system testing of filesystem. Custom macros}

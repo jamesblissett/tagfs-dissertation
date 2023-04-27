@@ -23,6 +23,18 @@ often handled through negative return values (this is the case with the fork()
 libc function) this makes it very easy to forget to handle error cases and as a
 result can reduce the robustness of the software.
 
+Rust also helped me develop the project via its strong static type system. This
+caused many errors that would be runtime errors in dynamically typed languages
+to become compile time errors in Rust. Compile time errors are very much
+preferable to runtime errors because it is not necessary to run the code path
+that causes the error. Static typing in this way also reduced the amount of
+trivial tests I would have had to write in a more dynamic language. For
+example, I would have had to test how a function behaves with unexpected input
+types (e.g. giving a string when the function expected an integer) and ensure
+that the program did not crash when run this way. I believe therefore that
+static typing reduced the development time of my project (because I had to
+write less trivial tests) and increased the robustness of the software.
+
 Another way that I found Rust to have been a good fit for my project was via
 the use of the Rust build system \texttt{cargo}. The cohesiveness of
 \texttt{cargo} in containing a documentation generator, testing harness and
