@@ -45,10 +45,10 @@ already targeting would be using a Linux platform anyway.
 
 \subsection{Technology Choices}
 
-Choosing suitable technology is a vital component of a successful software
-project. Unsuitable technology can result in a project being much more complex,
-brittle, and unmaintainable than it otherwise could have been. \todo{source?
-(dude just trust me)}
+In my experience of creating software for myself, I have found that choosing
+suitable technology is a vital component of a successful software project.
+Unsuitable technology can result in a project being much more complex, brittle,
+and unmaintainable than it otherwise could have been.
 
 I chose Rust as the implementation language for my project. One of the factors
 that pushed me towards Rust was my prior experience creating small hobby
@@ -374,8 +374,8 @@ for that particular subcommand.
     {BNF description of the query language of \texttt{tagfs}. Note that set
     notation is used as a shorthand to describe production rules with many
     terminals. For example the set $\{a, b, c\}$ produces the rule $a \vert b
-    \vert c$. \todo{note that tags cannot have the same name as boolean
-    operators}}
+    \vert c$. There is the additional constraint that tags cannot share the
+    same name as a boolean operator.}
 \end{figure}
 % }}}
 
@@ -638,9 +638,6 @@ remounting the file system to handle changes is completely unnecessary.
 
 \section{Implementation}
 \label{sec:implementation}
-\todo{Talk about order of development, e.g. making empty fs first etc...}
-\todo{Talk about how core functionality is implemented as a library separate to
-    the cli.}
 
 The \texttt{tagfs} project has two main components: the FUSE file system and
 the CLI tool. There is a significant overlap in functionality between the two
@@ -693,8 +690,7 @@ messages from a single source of truth. This source of truth is the special
 documentation comments within the structures and enums used by clap to build
 the CLI. This makes it extremely easy to keep both the documentation and
 command line help in sync, and makes it easy to remember to update the
-documentation as it is right next to the corresponding code. \todo{Defo Maybe
-example of declarative nature of clap arg parsing?}
+documentation as it is right next to the corresponding code.
 
 Next I created the concept of queries within \texttt{tagfs} and decided to make
 a mini DSL to specify them. This required me to create a tokeniser that splits
@@ -715,12 +711,6 @@ this information. I think this was a fair trade-off, because queries tend to be
 on the shorter side and spotting errors is usually fairly simple.
 
 \subsection{Software Development Practices}
-
-\todo{Talk about use of static analysis - clippy.}
-\todo{Talk about use of cargo doc.}
-\todo{Talk about conditional compilation of the autotag feature to reduce
-dependencies.}
-\todo{Talk about how static typing helped me.}
 
 During the development of \texttt{tagfs} I tried to follow good software
 development practices. The aim of these practices being to improve the
@@ -771,20 +761,19 @@ library will call my code when an ``ls'' is performed in the file system.
 
 Another software development technique I made use of during development was
 conditional compilation in the form of cargo
-features\footnote{\url{https://doc.rust-lang.org/cargo/reference/features.html}}.
+features \cite{cargo-book}.
 Conditional compilation is a method for compiling the code base in different
 ways depending on a set of input parameters. For example, it might be desirable
 to compile a particular block of code only on certain platforms - conditional
-compilation allows this to be expressed in the source code. \todo{Maybe I need
-to properly reference the cargo book?} In \texttt{tagfs} I use conditional
-compilation to allow the user to specify, at compile time, whether they would
-like to include the autotagging functionality. The way that I achieve this is
-by using cargo features to define an ``autotag'' feature and to specify the
-additional dependencies that are required to build this feature. Then in the
-source code the module that implements the autotagging feature is preceded by
-the declaration ``\verb@#[cfg(feature = "autotag")]@'' which tells the Rust
-compiler to only compile this next block if the condition is true i.e. the
-``autotag'' feature is active. This provides a similar behaviour to
+compilation allows this to be expressed in the source code. In \texttt{tagfs} I
+use conditional compilation to allow the user to specify, at compile time,
+whether they would like to include the autotagging functionality. The way that
+I achieve this is by using cargo features to define an ``autotag'' feature and
+to specify the additional dependencies that are required to build this feature.
+Then in the source code the module that implements the autotagging feature is
+preceded by the declaration ``\verb@#[cfg(feature = "autotag")]@'' which tells
+the Rust compiler to only compile this next block if the condition is true i.e.
+the ``autotag'' feature is active. This provides a similar behaviour to
 preprocessor macros in C such as \verb@#ifdef@ and \verb@#ifndef@. The main
 reasons I chose to increase the complexity of the build process and use
 conditional compilation was to provide the user with flexibility regarding the
@@ -792,11 +781,11 @@ number of dependencies required to build the code and to allow the user to
 disable features that may not be useful for them. I think this is especially
 relevant for the autotagging feature, because it is a feature that runs
 tangential to the rest of the code and therefore is easy to ``split out''
-without causing issues elsewhere in the code base.
-This would not be the case for other more fundamental features, such as tags
-being able to have an optional value. This feature runs deep throughout the
-project and therefore would not be a good target for conditional compilation as
-the complexity would be very high.
+without causing issues elsewhere in the code base. This would not be the case
+for other more fundamental features, such as tags being able to have an
+optional value. This feature runs deep throughout the project and therefore
+would not be a good target for conditional compilation as the complexity would
+be very high.
 
 I also made use of logging to help me develop \texttt{tagfs}. My main usage of
 logging was to be able to trace which FUSE functions are called and in what

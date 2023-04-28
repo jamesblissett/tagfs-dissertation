@@ -17,7 +17,7 @@ store is commonly a physical storage device such as a hard disk drive (HDD).
 However, it is important to note that this is not always the case and there is
 no requirement for a file system to manage a physical storage device. File
 systems that depend on another file system as their underlying data store are
-known as a VFS (virtual file system).
+known as a VFS (virtual file system) \cite{kernel-vfs}.
 
 The high level filing cabinet metaphor that is built on the low level interface
 provided by a particular file system implementation will be familiar to most
@@ -57,30 +57,28 @@ directory.
 
 The strict hierarchical nature of the file system falls apart with the addition
 of links to the file system. There are two types of links in UNIX file systems:
-hard links and symbolic (or soft) links. Symbolic links (often abbreviated as
-symlinks) are a special kind of file-like object that act as a window into
-another part of the file system. Symbolic links have a name like a normal file,
-but they additionally have a target which is another path that they act as a
-window into. For example, you could imagine a symbolic link named
-\texttt{my-link} in the \texttt{images} directory with a target of
+hard links \cite{link} and symbolic (or soft) links \cite{symlink}. Symbolic
+links (often abbreviated as symlinks) are a special kind of file-like object
+that act as a window into another part of the file system. Symbolic links have
+a name like a normal file, but they additionally have a target which is another
+path that they act as a window into. For example, you could imagine a symbolic
+link named \texttt{my-link} in the \texttt{images} directory with a target of
 \texttt{/code}. The existence of this link would mean that now the path
 \texttt{/images/my-link/main.c} refers to the same file as
 \texttt{/code/main.c} (the same property holds for
-\texttt{/images/my-link/Makefile} also). \todo{Talk about how symbolic links
-can introduce cycles.}
+\texttt{/images/my-link/Makefile} also). \ififeellikeit{Talk about how symbolic
+links can introduce cycles.}
 
 A hard link is a reference to a piece of data. Hard links are very similar to
 regular files, because regular files are in fact hard links. A hard link
-references an inode\footnote{\todo{Explain that even Dennis Ritchie does not
-know exactly why an inode is called an inode.}
-https://lkml.indiana.edu/hypermail/linux/kernel/0207.2/1182.html} \cite{inode}
-by way of an inode number. An inode is a data structure internal to the file
-system that is used to keep track of metadata relating to some user data. An
-inode number is a number that uniquely identifies an inode on a particular file
-system. The consequence of this is that hard links, and therefore regular
-files, don't actually own their data; they only reference it through an inode
-number. This means that there can be multiple distinct files that reference the
-same inode, and therefore are associated with the same data.
+references an inode \cite{inode} by way of an inode number. An inode is a data
+structure internal to the file system that is used to keep track of metadata
+relating to some user data. An inode number is a number that uniquely
+identifies an inode on a particular file system. The consequence of this is
+that hard links, and therefore regular files, don't actually own their data;
+they only reference it through an inode number. This means that there can be
+multiple distinct files that reference the same inode, and therefore are
+associated with the same data.
 
 % Sample file hierarchy figure {{{
 \begin{figure}[h]
@@ -132,7 +130,7 @@ same inode, and therefore are associated with the same data.
 
 The primary way most users interact with file systems is through a GUI
 (graphical user interface) file manager such as \texttt{thunar} or
-\texttt{nautilus}. \todo{Maybe screenshot of file manager with tree view?}
+\texttt{nautilus}. \ififeellikeit{Maybe screenshot of file manager with tree view?}
 However, it is also possible to manage a file system without a GUI and use CLI
 (command line interface) tools such as \texttt{ls} or \texttt{mv}. Both GUI
 file managers and CLI tools utilise the low level interface exposed by the
@@ -238,7 +236,7 @@ a handle to \texttt{/dev/fuse} and then returning it to the user space file
 system. \texttt{fusermount} returns this handle over a socket given to it via
 an environment variable at launch.
 
-\todo{Talk (briefly I think) about the binary protocol fuse talks over
+\ififeellikeit{Talk (briefly I think) about the binary protocol fuse talks over
 \texttt{/dev/fuse}}
 
 \section{Memory Safety and the Rust Programming Language}
@@ -250,7 +248,7 @@ problems caused when it is not adhered to.
 
 Memory safety is a property of a program that means that the program does not
 under any circumstances have any bugs relating to invalid pointer access or
-accessing uninitialised data \todo{source?}. These two classes of bug contain
+accessing uninitialised data \cite{mem-safety}. These two classes of bug contain
 many common sources of security issues in programs such as use-after-free,
 buffer overflow, and invalid pointer dereferences. In fact memory safety
 related bugs are some of the most frequent security bugs in many widely used
@@ -258,9 +256,9 @@ software packages such as Chromium \cite{chromium-mem-safety}, with the project
 estimating that 70\% of their security bugs are related to memory safety
 issues.
 
-\todo{Talk about and define exactly what are use-after-free, buffer overflow
+\ififeellikeit{Talk about and define exactly what are use-after-free, buffer overflow
 etc.}
-\todo{Talk about how memory leaks are not a memory safety issue.}
+\ififeellikeit{Talk about how memory leaks are not a memory safety issue.}
 
 One way of ensuring memory safety is through the use of a runtime garbage
 collector. This, in addition to disallowing pointer arithmetic, ensures memory
