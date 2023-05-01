@@ -3,8 +3,7 @@
 
 \section{File Systems}
 
-\todo{Find reference for basic file system stuff. \cite{unix-intro}
-\cite{multics-fs}}
+\todo{Find reference for basic file system stuff. \cite{multics-fs}}
 
 The file system is a fundamental abstraction for almost all modern operating
 systems. The abstraction allows the operating system and user programs to
@@ -22,17 +21,18 @@ known as a VFS (virtual file system) \cite{kernel-vfs}.
 The high level filing cabinet metaphor that is built on the low level interface
 provided by a particular file system implementation will be familiar to most
 computer users. The metaphor consists of a filing cabinet containing many named
-files. These files can contain arbitrary data. However, some of these files may
-not contain data themselves but rather other files, and in this case they are
-called directories (or folders in some versions of the metaphor). This nesting
-of files within directories creates a hierarchical structure where a single
-root directory (analogous to the filing cabinet) contains an arbitrarily
-deeply nested series of files and directories. The hierarchy of files within
-directories can conceptually be arbitrarily deep, but most particular
-implementations enforce a limit for simplicity. The filing cabinet metaphor is
-also useful in demonstrating that a file or directory can only be contained
-within one other directory. Each file or directory (excluding the root
-directory) must have one and only one parent in the hierarchy.
+files. These files can contain arbitrary data \cite{unix-intro}. However, some
+of these files may not contain data themselves but rather other files, and in
+this case they are called directories (or folders in some versions of the
+metaphor). This nesting of files within directories creates a hierarchical
+structure where a single root directory (analogous to the filing cabinet)
+contains an arbitrarily deeply nested series of files and directories. The
+hierarchy of files within directories can conceptually be arbitrarily deep, but
+most particular implementations enforce a limit for simplicity. The filing
+cabinet metaphor is also useful in demonstrating that a file or directory can
+only be contained within one other directory. Each file or directory (excluding
+the root directory) must have one and only one parent in the hierarchy
+\cite{unix-intro}.
 
 In Figure~\ref{fig:sample file hierarchy} there are two distinct files named
 \texttt{timeline.txt}. It becomes ambiguous to refer to a file only by its name
@@ -53,7 +53,7 @@ specified from the root of the file system, but from some other arbitrary
 location. For example, the path \texttt{project1/timeline.txt} is a relative
 path that is specified from the \texttt{documents} directory. The directory
 that a relative path is specified from is known as the current working
-directory.
+directory \cite{unix-intro}.
 
 The strict hierarchical nature of the file system falls apart with the addition
 of links to the file system. There are two types of links in UNIX file systems:
@@ -120,14 +120,6 @@ associated with the same data.
 
 \subsection{Operating Systems and the File System}
 
-\todo{
-    Talk about how ls makes a system call and the kernel receives it and then
-    calls the fuse kernel module who then writes to unix socket which fuser
-    (Rust) reads who then calls me. In the general case libFUSE would call the
-    libc function mount with fs type 'fuse'. In my case fuser calls fusermount3
-    and listens to the returned unix socket for messages from the kernel.
-}
-
 The primary way most users interact with file systems is through a GUI
 (graphical user interface) file manager such as \texttt{thunar} or
 \texttt{nautilus}. \ififeellikeit{Maybe screenshot of file manager with tree view?}
@@ -138,25 +130,24 @@ operating system and implemented by a particular file system. The traditional
 way to use this interface is via the platform library exposed by the operating
 system\footnote{On some platform like Microsoft Windows, using the platform
 library is required because the system call interface is not guaranteed to be
-stable between releases.}. \todo{Not sure if I should stay abstract about a
-particular operating system or be specifically about UNIX-likes here.} On
-UNIX-like operating systems this library is \texttt{libc} \cite{libc}. \todo{Do
-I need to talk about the difference between an abstract libc and concrete like
-glibc or musl?} The overwhelming majority of programs that run on UNIX-like
-operating systems use \texttt{libc} to help them interact with the platform.
-The operating systems' \texttt{libc} contains functions that require access to
-the file system (such as \texttt{stat} \cite{stat-syscall}). To get access to
-the file system the \texttt{libc} function will execute a system
-call \cite{syscalls} (often called a syscall). A system call is a way for an
-unprivileged user program to ask the operating system to perform an action on
-its behalf. When executed, a system call performs a context switch
-\todo{Explain what a context switch actually is.} and jumps into kernel
-code\footnote{This is not strictly true, some system calls do not require
-jumping into kernel code.}. The kernel is the part of the operating system
-that, amongst many other functions, responds to system calls. When the kernel
-responds to a system call that requires accessing the file system, it must
-first ascertain which file system implementation is the correct one to call for
-this particular action. On Linux this is the VFS layer in the kernel
+stable between releases.}. On UNIX-like operating systems this library is
+\texttt{libc} \cite{libc}. There are multiple qualifying implementations for
+\texttt{libc} on Linux with \texttt{glibc} being the very common, but all
+implementations of \texttt{libc} must conform to the standard interface. The
+overwhelming majority of programs that run on UNIX-like operating systems use
+\texttt{libc} to help them interact with the platform. The operating systems'
+\texttt{libc} contains functions that require access to the file system (such
+as \texttt{stat} \cite{stat-syscall}). To get access to the file system the
+\texttt{libc} function will execute a system call \cite{syscalls} (often called
+a syscall). A system call is a way for an unprivileged user program to ask the
+operating system to perform an action on its behalf. When executed, a system
+call performs a context switch, by saving the state of the current process, and
+jumps into kernel code\footnote{This is not strictly true, some system calls do
+not require jumping into kernel code.}. The kernel is the part of the operating
+system that, amongst many other functions, responds to system calls. When the
+kernel responds to a system call that requires accessing the file system, it
+must first ascertain which file system implementation is the correct one to
+call for this particular action. On Linux this is the VFS layer in the kernel
 \cite{kernel-vfs}. Once this is determined, the kernel asks the file system
 implementation to perform the action specified by the system call. It may also
 return some data to the calling user program via a buffer or a return value.
@@ -220,12 +211,12 @@ correct underlying file system.
 
 On Linux mounting a file system is a restricted operation that can only be
 performed by the root user \cite{mount}. However, FUSE has the explicit goal of
-"allowing secure, non-privileged mounts" \cite{kernel-fuse}. To allow FUSE file
-systems to be mounted by non-privileged users, FUSE provides a mounting utility
-\texttt{fusermount} which is installed with the setuid \cite{setuid} permission
-set to the root user. A binary with this permission can be run by a normal
-user, but whilst it is running it has all the privileges of the root user. This
-allows a normal user to mount a FUSE file system.
+``allowing secure, non-privileged mounts'' \cite{kernel-fuse}. To allow FUSE
+file systems to be mounted by non-privileged users, FUSE provides a mounting
+utility \texttt{fusermount} which is installed with the setuid \cite{setuid}
+permission set to the root user. A binary with this permission can be run by a
+normal user, but whilst it is running it has all the privileges of the root
+user. This allows a normal user to mount a FUSE file system.
 
 After the FUSE file system has been mounted there needs to be a channel for
 communication between the FUSE kernel module and the user space program
@@ -234,7 +225,7 @@ file. However, reading and writing to this file is a privileged action so
 \texttt{fusermount} (with its elevated permissions) is responsible for opening
 a handle to \texttt{/dev/fuse} and then returning it to the user space file
 system. \texttt{fusermount} returns this handle over a socket given to it via
-an environment variable at launch.
+an environment variable at launch \cite{fuser-mounting-code}.
 
 \ififeellikeit{Talk (briefly I think) about the binary protocol fuse talks over
 \texttt{/dev/fuse}}

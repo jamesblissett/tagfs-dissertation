@@ -1,7 +1,6 @@
 \chapter{Project Execution}
 \vspace{1cm}
 
-\todo{Say what my project actually is.}
 My project is a tag-based FUSE file system (from now on creatively referred to
 as ``\texttt{tagfs}''). \texttt{tagfs} is written in the Rust programming
 language and relies on the ``fuser'' library to communicate with and decode
@@ -9,8 +8,6 @@ messages from the FUSE kernel module. Tagfs also makes use of the SQLite
 database library through the Rust wrapper interface provided by ``rusqlite''.
 Specific features of tagfs are discussed in more detail in Section
 \ref{section:features}.
-\todo{This feels like maybe it should be part of the introduction?}
-\todo{Talk about what exactly a tag is?}
 
 \section{Design}
 \label{sec:design}
@@ -716,12 +713,12 @@ During the development of \texttt{tagfs} I tried to follow good software
 development practices. The aim of these practices being to improve the
 robustness of the code and to ensure that the code is readable and therefore
 maintainable. One of these techniques is static analysis. Static analysis is
-used to detect potential problems in the code without actually running it
-\todo{Do I need a source here?}. Rust has a first party static analysis tool
-called clippy\footnote{Named after everyone's favourite paper-clip. Can be
-found at \url{https://github.com/rust-lang/rust-clippy}}. Clippy can detect
-style problems and suggest alternatives, such as transforming iterator chains
-that contain a \verb@filter@ followed by a \verb@map@ into a single
+used to detect potential problems in the code without actually running it .
+Rust has a first party static analysis tool called clippy\footnote{Named after
+everyone's favourite paper-clip. Can be found at
+\url{https://github.com/rust-lang/rust-clippy}}. Clippy can detect style
+problems and suggest alternatives, such as transforming iterator chains that
+contain a \verb@filter@ followed by a \verb@map@ into a single
 \verb@filter_map@ operation. Lots of the clippy style detections are for
 seemingly trivial problems (for example preferring the use of \verb@xs.first()@
 over \verb@xs.get(0)@) however, in my experience I found that these ``trivial''
