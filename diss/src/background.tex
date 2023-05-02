@@ -1,14 +1,10 @@
-\chapter{Background}
+\chapter{File Systems}
 \vspace{1cm}
-
-\section{File Systems}
-
-\todo{Find reference for basic file system stuff. \cite{multics-fs}}
 
 The file system is a fundamental abstraction for almost all modern operating
 systems. The abstraction allows the operating system and user programs to
 interact with a variety of devices and services through a single unified
-interface.
+interface \cite{unix-intro}.
 The purpose of a specific file system is to implement this common interface for
 a particular underlying data store. The exact nature of the data store is not
 important to the consumer of the file system's interface. The underlying data
@@ -28,7 +24,7 @@ metaphor). This nesting of files within directories creates a hierarchical
 structure where a single root directory (analogous to the filing cabinet)
 contains an arbitrarily deeply nested series of files and directories. The
 hierarchy of files within directories can conceptually be arbitrarily deep, but
-most particular implementations enforce a limit for simplicity. The filing
+some particular implementations enforce a limit for simplicity. The filing
 cabinet metaphor is also useful in demonstrating that a file or directory can
 only be contained within one other directory. Each file or directory (excluding
 the root directory) must have one and only one parent in the hierarchy
@@ -44,16 +40,16 @@ of steps is known as a path and can be written as a \texttt{/} delimited list
 of the steps taken to reach a file or directory. Using the previous example the
 path would be \texttt{/documents/project1/timeline.txt}. As a result of the
 single parent rule, each file or directory has a single path that uniquely
-identifies it amongst all other files and directories in the hierarchy. This
-single unique path is known as an absolute path, meaning the steps to arrive at
-a file or directory are completely specified all the way from the root of the
-file system\footnote{This is not the case when the file system contains
-symbolic links.}. In contrast to this, a relative path is a path that is not
-specified from the root of the file system, but from some other arbitrary
-location. For example, the path \texttt{project1/timeline.txt} is a relative
-path that is specified from the \texttt{documents} directory. The directory
-that a relative path is specified from is known as the current working
-directory \cite{unix-intro}.
+identifies it amongst all other files and directories in the
+hierarchy\footnote{This is not the case when the file system contains symbolic
+links.}. This single unique path is known as an absolute path, meaning the
+steps to arrive at a file or directory are completely specified all the way
+from the root of the file system. In contrast to this, a relative path is a
+path that is not specified from the root of the file system, but from some
+other arbitrary location. For example, the path \texttt{project1/timeline.txt}
+is a relative path that is specified from the \texttt{documents} directory. The
+directory that a relative path is specified from is known as the current
+working directory \cite{unix-intro}.
 
 The strict hierarchical nature of the file system falls apart with the addition
 of links to the file system. There are two types of links in UNIX file systems:
@@ -193,7 +189,7 @@ compiled into the kernel. However, this flexibility comes at performance and
 hardware utilisation cost with an average of a 31\% increase in CPU utilisation
 when file system requests are routed through the FUSE layer \cite{fuse-perf}.
 The performance decrease has a larger variance with some cases having as low as
-5\% overhead. However, in other cases that are "unfriendly to FUSE" such as
+5\% overhead. However, in other cases that are ``unfriendly to FUSE'' such as
 concurrent random access to large files can cause an 83\% decrease in
 performance even if optimised \cite{fuse-perf}.
 
@@ -227,15 +223,15 @@ a handle to \texttt{/dev/fuse} and then returning it to the user space file
 system. \texttt{fusermount} returns this handle over a socket given to it via
 an environment variable at launch \cite{fuser-mounting-code}.
 
-\ififeellikeit{Talk (briefly I think) about the binary protocol fuse talks over
-\texttt{/dev/fuse}}
+\chapter{Memory Safety and the Rust Programming Language}
+\vspace{1cm}
 
-\section{Memory Safety and the Rust Programming Language}
-
-In this section I will attempt to give a brief overview of the Rust programming
-language and how it ensures memory safety without the use of a runtime garbage
-collector. Also I will talk about why memory safety is important, and the
-problems caused when it is not adhered to.
+To understand why I chose to use the Rust programming language to develop my
+project, I believe it is important to briefly explain the defining feature of
+Rust: memory safety. In this chapter I will attempt to give a brief overview of
+the Rust programming language and how it ensures memory safety without the use
+of a runtime garbage collector. Also I will talk about why memory safety is
+important, and the problems caused when it is not adhered to.
 
 Memory safety is a property of a program that means that the program does not
 under any circumstances have any bugs relating to invalid pointer access or

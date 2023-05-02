@@ -3,8 +3,8 @@
 
 Organising files can be a tedious, error-prone, and unsatisfying activity. The
 file system has survived to this day mostly unchanged from its initial origins
-in modelling a real physical paper filing system \todo{ref here}. The
-hierarchical structure enforced by the file system can feel confining and
+\cite{multics-fs} after being inspired by a real physical paper filing system.
+The hierarchical structure enforced by the file system can feel confining and
 inflexible. My project aims to attempt a different file management strategy,
 whilst still maintaining compatibility and interoperability with the normal
 hierarchical method. The file management strategy of my project is based upon
@@ -17,16 +17,16 @@ with the ``year=2019'' tag, but without the ``favourite'' tag.
 
 The project maintains compatibility with the traditional hierarchical file
 system structure by exposing a virtual file system using the FUSE technology
-available for Linux. By using this file system, the user may perform arbitrary
-queries against tagged files in the system by specifying their query as a file
-path. They may also lookup a particular file by name to discover what tags are
-associated with it. Using a virtual file system approach allows the user to
-access their files using the tag based methodology from within all the normal
-software applications and operating system components that they are familiar
-with. The integration of the tag based strategy with the traditional
-hierarchical method, is a much more feasible way of adopting tag based file
-organisation compared to requiring the operating system and every user program
-to be made aware of and updated to handle the new paradigm.
+available for Linux \cite{kernel-fuse}. By using this file system, the user may
+perform arbitrary queries against tagged files in the system by specifying
+their query as a file path. They may also lookup a particular file by name to
+discover what tags are associated with it. Using a virtual file system approach
+allows the user to access their files using the tag based methodology from
+within all the normal software applications and operating system components
+that they are familiar with. The integration of the tag based strategy with the
+traditional hierarchical method, is a much more feasible way of adopting tag
+based file organisation compared to requiring the operating system and every
+user program to be made aware of and updated to handle the new paradigm.
 
 The intended users of the software are technically capable users who already
 know their way around and are comfortable on the command line. The software
