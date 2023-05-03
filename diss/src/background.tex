@@ -62,8 +62,7 @@ link named \texttt{my-link} in the \texttt{images} directory with a target of
 \texttt{/code}. The existence of this link would mean that now the path
 \texttt{/images/my-link/main.c} refers to the same file as
 \texttt{/code/main.c} (the same property holds for
-\texttt{/images/my-link/Makefile} also). \ififeellikeit{Talk about how symbolic
-links can introduce cycles.}
+\texttt{/images/my-link/Makefile} also).
 
 A hard link is a reference to a piece of data. Hard links are very similar to
 regular files, because regular files are in fact hard links. A hard link
@@ -118,7 +117,7 @@ associated with the same data.
 
 The primary way most users interact with file systems is through a GUI
 (graphical user interface) file manager such as \texttt{thunar} or
-\texttt{nautilus}. \ififeellikeit{Maybe screenshot of file manager with tree view?}
+\texttt{nautilus}.
 However, it is also possible to manage a file system without a GUI and use CLI
 (command line interface) tools such as \texttt{ls} or \texttt{mv}. Both GUI
 file managers and CLI tools utilise the low level interface exposed by the
@@ -242,10 +241,6 @@ related bugs are some of the most frequent security bugs in many widely used
 software packages such as Chromium \cite{chromium-mem-safety}, with the project
 estimating that 70\% of their security bugs are related to memory safety
 issues.
-
-\ififeellikeit{Talk about and define exactly what are use-after-free, buffer overflow
-etc.}
-\ififeellikeit{Talk about how memory leaks are not a memory safety issue.}
 
 One way of ensuring memory safety is through the use of a runtime garbage
 collector. This, in addition to disallowing pointer arithmetic, ensures memory

@@ -55,9 +55,9 @@ the foreign code base successfully to solve my issues. The \texttt{rusqlite}
 library had no issues with documentation, and I could also use most of the
 existing documentation for SQLite when it was insufficient. I believe that
 using an SQL database proved to be a good decision for this project as it was
-very easy to integrate with the code that I had already created up until that
-point. This was compounded by the fact that I was already familiar with the
-basics of SQL and I had experience with SQLite in other projects.
+very easy to integrate with the code that I had already iterated on up until
+that point. This was compounded by the fact that I was already familiar with
+the basics of SQL and I had experience with SQLite in other projects.
 
 The design of the system is flexible and does not restrict the user or funnel
 them towards any particular tagging methodology. This allows the user to create
@@ -75,17 +75,19 @@ easy integrate \texttt{tagfs} into their existing command line based workflow,
 and allows the software to feel more natural to existing technical users.
 Additionally, the file system component of \texttt{tagfs} naturally fits into a
 technical UNIX user's environment by virtue of the old adage ``\emph{everything
-is a file}''. This further strengthens the integration between \texttt{tagfs}
-and the user's everyday tools by allowing them to interact with \texttt{tagfs}
-like any other part of the system. The last way in which \texttt{tagfs}
-integrates with the user's system is through the \texttt{edit} subcommand. This
-allows the user to edit the tag database with their preferred editor. I believe
-this is a much better solution for editing the tag database than developing a
-full custom editor. This is because it allows the user extreme flexibility in
-how they edit the tag database, and it reuses the user's editor to do so, which
-as a power user they are surely familiar and comfortable with. This allows the
-user to forgo learning a single use specific editor, and instead focus on the
-task of editing the tag database.
+is a file}''\footnote{I am unsure who said this originally, but it is has been a
+very common expression in the UNIX / Linux community since at least the
+90s.}. This further strengthens the integration between \texttt{tagfs} and
+the user's everyday tools by allowing them to interact with \texttt{tagfs} like
+any other part of the system. The last way in which \texttt{tagfs} integrates
+with the user's system is through the \texttt{edit} subcommand. This allows the
+user to edit the tag database with their preferred editor. I believe this is a
+much better solution for editing the tag database than developing a full custom
+editor. This is because it allows the user extreme flexibility in how they edit
+the tag database, and it reuses the user's editor to do so, which as a power
+user they are surely familiar and comfortable with. This allows the user to
+forgo learning a single use specific editor, and instead focus on the task of
+editing the tag database.
 
 Using a DSL (domain specific language) for querying the tag database, is
 another way in which the system delivers the flexibility required by the target
@@ -137,9 +139,6 @@ as possible is important, for which modular design is a great helper.
 
 \section{Potential Future Work}
 \label{sec:potential-features}
-
-\ififeellikeit{Tag dependency or grouping - eg a 'film' tag implies that you must have
-an 'imdb' tag also.}
 
 Due to the modular design and iterative development style used to develop the
 \texttt{tagfs} project, it would be easy to extend the project with new

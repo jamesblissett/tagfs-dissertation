@@ -90,19 +90,18 @@ catch these bugs at compile time and prevent them from ever occurring.
 \subsubsection{Data Storage Back-end}
 
 Early on in the planning phase of my project I knew I was going to need some
-mechanism to persist data to the file system between mounts of the file system.
-I knew my data would be at least vaguely relational, because I knew that I
-needed to model the relationship between a file system path and the tags
+mechanism to persist data to the file system between mounts of the virtual file
+system. I knew my data would be at least vaguely relational, because I knew
+that I needed to model the relationship between a file system path and the tags
 associated with it. This is what initially drew me to a database solution
 rather than a simpler flat text file. However, the main reason I chose to use
 an SQL database was the ability to constrain my data and enforce invariants at
 the database level. While it is possible to do this with a flat file approach,
 I believed that this would be difficult to implement and less performant than
-using a database.
-Additionally, it made sense to use an off-the-shelf solution because the
-particular underlying data store is not directly relevant to the goals of the
-project and therefore I could have spent a lot of time reinventing the wheel
-rather than creating \texttt{tagfs}.
+using a database. Additionally, it made sense to use an off-the-shelf solution
+because the particular underlying data store is not directly relevant to the
+goals of the project and therefore I could have spent a lot of time reinventing
+the wheel rather than creating \texttt{tagfs}.
 
 Once I had decided that I was going to use a database, my choice of which
 database implementation to use was very easy. SQLite is the most deployed
@@ -111,7 +110,7 @@ my use case of a local data store. It is fast, battle-tested, and well
 documented. Unsurprisingly, there is a Rust wrapper library for
 SQLite\footnote{This highlights another important Rust feature: its foreign
 function interface (FFI)}. Rusqlite packages up SQLite into a more Rust-like
-interface suitable for use from entirely safe code.
+interface suitable for use from entirely safe Rust code.
 
 \subsection{Database Schema Design}
 
@@ -404,33 +403,33 @@ rules that specify that parentheses have the highest precedence, followed by
 In the database it is possible for tags to be associated with values, so the
 query language supports matching on a tag's value as well as just the tag's
 presence. Query expressions can be formed by using a comparison operator along
-with a tag and a value. The most common comparison operator is \texttt{=} it is
-used to test whether a tag's value contains a particular substring\footnote{By
-default the \texttt{=} operator is not case sensitive. This can be adjusted via
-a flag on the \texttt{query} subcommand.}. For example, the query
-\texttt{title=before} matches any paths that have a tag called ``title'' with a
-value containing the string ``before''. Another comparison operator is
-\texttt{==} (strict or exact equals) this is similar to the standard \texttt{=}
-operator except the given value must be exactly the same as the value attached
-to the tag in the database for it to match. The final two comparison operators
-are the less than \texttt{<} and greater than \texttt{>} operators. These match
-a path if the path has the given tag and the tag's value is less than or
-greater than (depending on the operator used) the value given in the query. The
-ordering used to determine whether a value is less than or greater than another
-is lexicographical. This can produce behaviour that may be surprising such as
-the fact that `$2$'~$>$~`$10$'. These comparison operators can of course be
-combined with the earlier described boolean operators to create more complex
-query expressions. The values used with the comparison operators must be
-escaped properly to ensure the query's semantics. For example, the query
-\texttt{genre=science fiction} is invalid because values are terminated by a
-space character, so this is parsed as two separate tags ``genre'' and
-``fiction''. Since there is no comparison operator between them, the query is
-invalid and is therefore rejected. To achieve the desired meaning the value
-associated with a tag can be escaped or quoted. For example, to query for a
-path with the tag ``genre'' and value ``science fiction'' the two forms
-\verb_genre=science\ fiction_ and \texttt{genre="science fiction"} can be used
-and both have the same meaning. The query syntax is specified more precisely in
-Figure~\ref{fig:query-bnf}
+with a tag and a value. The most common comparison operator is \texttt{=}, it
+is used to test whether a tag's value contains a particular
+substring\footnote{By default the \texttt{=} operator is not case sensitive.
+This can be adjusted via a flag on the \texttt{query} subcommand.}. For
+example, the query \texttt{title=before} matches any paths that have a tag
+called ``title'' with a value containing the string ``before''. Another
+comparison operator is \texttt{==} (strict or exact equals) this is similar to
+the standard \texttt{=} operator except the given value must be exactly the
+same as the value attached to the tag in the database for it to match. The
+final two comparison operators are the less than \texttt{<} and greater than
+\texttt{>} operators. These match a path if the path has the given tag and the
+tag's value is less than or greater than (depending on the operator used) the
+value given in the query. The ordering used to determine whether a value is
+less than or greater than another is lexicographical. This can produce
+behaviour that may be surprising such as the fact that `$2$'~$>$~`$10$'. These
+comparison operators can of course be combined with the earlier described
+boolean operators to create more complex query expressions. The values used
+with the comparison operators must be escaped properly to ensure the query's
+semantics. For example, the query \texttt{genre=science fiction} is invalid
+because values are terminated by a space character, so this is parsed as two
+separate tags ``genre'' and ``fiction''. Since there is no comparison operator
+between them, the query is invalid and is therefore rejected. To achieve the
+desired meaning the value associated with a tag can be escaped or quoted. For
+example, to query for a path with the tag ``genre'' and value ``science
+fiction'' the two forms \verb_genre=science\ fiction_ and
+\texttt{genre="science fiction"} can be used and both have the same meaning.
+The query syntax is specified more precisely in Figure~\ref{fig:query-bnf}
 using BNF notation.
 
 \subsection{File System Features}
@@ -727,7 +726,10 @@ opinion, putting in the effort to correct these small issues is important for
 improving the clarity of the code. Additionally clippy can also detect
 potential performance issues, for example clippy can detect useless heap
 allocations that would be better served by a simple reference to an existing
-allocation.
+allocation. Using clippy in this way allows me to use the experience of the
+wider Rust community when developing my project. The community opinion on best
+practices is reflected in the suggestions made by clippy. This allows me to be
+more confident that my code base follows good coding practice.
 
 Whilst developing the project, I endeavoured to document the public API
 functions of \texttt{tagfs} and some of the internal private functions also.
@@ -735,7 +737,7 @@ Rust and the accompanying cargo\footnote{Cargo is the Rust programming
 language's build system and package manager, but it also includes an interface
 to the rust compiler's built in test runner and documentation builder. The
 cargo documentation can be found at
-\url{https://doc.rust-lang.org/cargo/index.html}} tooling makes creating and
+\cite{cargo-book}} tooling makes creating and
 maintaining documentation simple and hassle-free by keeping the documentation
 next to the code that it documents. Code is documented through the use of
 special comments, placed directly above the relevant function or module, that
@@ -762,27 +764,27 @@ features \cite{cargo-book}.
 Conditional compilation is a method for compiling the code base in different
 ways depending on a set of input parameters. For example, it might be desirable
 to compile a particular block of code only on certain platforms - conditional
-compilation allows this to be expressed in the source code. In \texttt{tagfs} I
-use conditional compilation to allow the user to specify, at compile time,
-whether they would like to include the autotagging functionality. The way that
-I achieve this is by using cargo features to define an ``autotag'' feature and
-to specify the additional dependencies that are required to build this feature.
-Then in the source code the module that implements the autotagging feature is
-preceded by the declaration ``\verb@#[cfg(feature = "autotag")]@'' which tells
-the Rust compiler to only compile this next block if the condition is true i.e.
-the ``autotag'' feature is active. This provides a similar behaviour to
-preprocessor macros in C such as \verb@#ifdef@ and \verb@#ifndef@. The main
-reasons I chose to increase the complexity of the build process and use
-conditional compilation was to provide the user with flexibility regarding the
-number of dependencies required to build the code and to allow the user to
+compilation allows this to be expressed directly in the source code. In
+\texttt{tagfs} I use conditional compilation to allow the user to specify, at
+compile time, whether they would like to include the autotagging functionality.
+The way that I achieve this is by using cargo features to define an ``autotag''
+feature and to specify the additional dependencies that are required to build
+this feature. Then in the source code the module that implements the
+autotagging feature is preceded by the declaration ``\verb@#[cfg(feature = "autotag")]@''
+which tells the Rust compiler to only compile this next block if the condition
+is true i.e. the ``autotag'' feature is active. This provides a similar
+behaviour to preprocessor macros in C such as \verb@#ifdef@ and \verb@#ifndef@.
+The main reasons I chose to increase the complexity of the build process and
+use conditional compilation was to provide the user with flexibility regarding
+the number of dependencies required to build the code and to allow the user to
 disable features that may not be useful for them. I think this is especially
 relevant for the autotagging feature, because it is a feature that runs
 tangential to the rest of the code and therefore is easy to ``split out''
 without causing issues elsewhere in the code base. This would not be the case
 for other more fundamental features, such as tags being able to have an
 optional value. This feature runs deep throughout the project and therefore
-would not be a good target for conditional compilation as the complexity would
-be very high.
+would not be a good target for conditional compilation as the additional
+maintenance complexity would be very high.
 
 I also made use of logging to help me develop \texttt{tagfs}. My main usage of
 logging was to be able to trace which FUSE functions are called and in what
@@ -813,20 +815,23 @@ specified in the Rust book \cite{rust-testing}. This includes the usage of both
 unit and integration tests. I used unit tests to isolate and test specific
 functions within my project. An example of this is the \verb@sanitise_path@
 function that is used to ensure that no two files in the same directory are
-given the same file name. Additionally, I found that test driven development
-(TDD) was an appropriate and useful technique for developing the lexer
-component of the query subsystem. Writing the tests before the implementation
-ensured that I had a good grasp of what the lexer needed to achieve and helped
-me to foresee tricky cases that the lexer would need to handle.
-Figure~\ref{fig:example-unit-test} is a code snippet from one of the tests in
-my project. It uses the \verb@assert_eq!@\footnote{In Rust, macros that can be
-called like normal functions are terminated with a `\texttt{!}' to help
-differentiate them from normal functions.} macro to test equality between its
-arguments and to provide a useful error message if the test fails. These tests
-were particularly useful when it came to adding the \texttt{==} operator at a
-later date to the initial implementation of the query subsystem. It ensured
-that the addition of a new operator did not break the existing functionality,
-which reduced the fear associated with modifying already working code.
+given the same file name. This function is a good target for unit testing
+because it is a pure function that does not rely on any external state - it is
+a simple mapping from inputs to outputs. Additionally, I found that test driven
+development (TDD) was an appropriate and useful technique for developing the
+lexer component of the query subsystem. Writing the tests before the
+implementation ensured that I had a good grasp of what the lexer needed to
+achieve and helped me to foresee tricky cases that the lexer would need to
+handle. Figure~\ref{fig:example-unit-test} is a code snippet from one of the
+tests in my project. It uses the \verb@assert_eq!@\footnote{In Rust, macros
+that can be called like normal functions are terminated with a `\texttt{!}' to
+help differentiate them from normal functions.} macro to test equality between
+its arguments and to provide a useful error message if the test fails. These
+tests were particularly useful when it came to adding the \texttt{==} operator
+at a later date to the initial implementation of the query subsystem. It
+ensured that the addition of a new operator did not break the existing
+functionality, which reduced the fear associated with modifying already working
+code.
 
 % example lex_query test {{{
 \begin{figure}
@@ -850,10 +855,11 @@ I used integration testing to test the public API of the library component of
 \texttt{tagfs}. This is the API that both the command line interface and the
 FUSE file system use to operate the tag database. Within these tests, the
 database is created entirely from scratch and stored in memory, so that the
-tests are easily reproducible. In Rust, integration tests are entirely separate
-crates\footnote{``Crate'' is the Rust specific term for compilation unit.}, so
-by design they cannot access anything that normal consumers of the library
-cannot.
+tests are easily reproducible. The integration tests can be found in the
+\verb@tests/@ directory in the root of the project. In Rust, integration tests
+are entirely separate crates\footnote{``Crate'' is the Rust specific term for
+compilation unit.}, so by design they cannot access anything that normal
+consumers of the library cannot.
 
 I also used integration testing to test the FUSE file system. This is done by
 creating a new temporary database and a temporary mount point. The file system
@@ -866,4 +872,5 @@ the built in \verb@assert!@ and \verb@assert_eq!@ macros) to test file system
 state. These include \verb@assert_symlink!@ to ensure that a path exists and is
 a symlink, and \verb@assert_dir_children!@ to ensure that a directory is
 located at the given path and that the directory's children in the file system
-match those given to the macro.
+match those given to the macro. These tests can also be found in the
+\verb@tests/@ directory.
